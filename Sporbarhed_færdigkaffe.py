@@ -24,6 +24,8 @@ Input_note = 'test bemærkning ved anfordring bla bla bla'
 Script_name = 'Sporbarhed_færdigkaffe.py'
 Path_files = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests'
 Request_id = int(time.time() * 100000) 
+Reporttypes_sections = {0:['a1','a2'], 1:['b1','b2'], 2:['c1','c2']}
+
 Server_04 = 'sqlsrv04'
 Db_04 = 'BKI_Datastore'
 Con_04 = pyodbc.connect('DRIVER={SQL Server};SERVER=' + Server_04 + ';DATABASE=' + Db_04)
@@ -43,14 +45,17 @@ Df_request = pd.DataFrame(data= {'Forespørgselstype':Input_request_type, 'Produ
 print(Request_id)
 print(Df_request)
 
+# Insert request for report
 def Request_insert(dataframe):
- #   try:
-        dataframe.to_sql('Sporbarhed_forespørgsel', con=Engine_04, schema='qa', if_exists='append', index=False)
-        pd.DataFrame(data={'Event':Script_name,'Note':'Request id: ' + str(Request_id)}).to_sql('Log', con=Engine_04, schema='dbo', if_exists='append', index=[0])
-    #except:
-        print('fejlet!!!')
-        
+   try:
+        dataframe.to_sql('Sporbarhed_forespørgsel', con=Engine_04, schema='trc', if_exists='append', index=False)
+        pd.DataFrame(data={'Event':Script_name,'Note':'Request id: ' + str(Request_id)}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
+   except:
+       pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
+       
 Request_insert(Df_request)
+
+print('a1' in Reporttypes_sections[0])
 # =============================================================================
 #     Insert into relevant table
 #     Insert into sektion log

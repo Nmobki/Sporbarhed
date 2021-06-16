@@ -25,7 +25,7 @@ Script_name = 'Sporbarhed_færdigkaffe.py'
 Path_files = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests'
 Request_id = int(time.time() * 100000) 
 # =============================================================================
-# Variables for various query connections
+# Variables for query connections
 # =============================================================================
 Server_04 = 'sqlsrv04'
 Db_04 = 'BKI_Datastore'
@@ -64,7 +64,7 @@ def Get_section_log_code(dataframe, visibility):
 def Request_insert(dataframe):
    try:
         dataframe.to_sql('Sporbarhed_forespørgsel', con=Engine_04, schema='trc', if_exists='append', index=False)
-        pd.DataFrame(data={'Event':Script_name,'Note':'Request id: ' + str(Request_id)}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
+        pd.DataFrame(data={'Event':Script_name,'Note':f'Request id: {Request_id}'}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
    except:
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
 
@@ -77,7 +77,7 @@ def Request_insert(dataframe):
 
 
        
-#**************************bRequest_insert(Df_request)
+# **************************     Request_insert(Df_request)
 
 
 # =============================================================================

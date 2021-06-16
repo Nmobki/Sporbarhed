@@ -41,21 +41,11 @@ Query_reporttypes =  f"""SELECT [Sektion] ,[Sektion_synlig]
                        AND [Forespørgselstype] = {Input_report_type}"""
 Df_sections = pd.read_sql(Query_reporttypes, Con_04)
 
-                   
-
-
-#dfCons.to_sql('ItemSegmentation', con=engine, schema='seg', if_exists='append', index=False)
-
 Df_request = pd.DataFrame(data= {'Forespørgselstype':Input_request_type, 'Produkttype':Input_produkttype,
                                  'Rapporttype':Input_report_type, 'Rapport_modtager':Input_recipients,
                                  'Rapport_filsti':Path_files, 'Rapport_pdf':Input_pdf
                                  ,'Rapport_excel':Input_excel, 'Note_forespørgsel':Input_note
                                  ,'Forespørgsels_id':Request_id}, index=[0])
-
-# pd.Dataframe(data={}).to_sql('Sporbarhed_sektion_log', con=Engine_04, schema='qa', if_exists='append', index=False)
-
-print(Request_id)
-print(Df_request)
 
 # Get visibility for section from query
 def Get_section_visibility(dataframe, section):
@@ -64,11 +54,11 @@ def Get_section_visibility(dataframe, section):
 # Find statuscode for section log
 def Get_section_log_code(dataframe, visibility):
     if len(dataframe) == 0:
-        return 1
+        return 1 # Empty dataframe
     if visibility == 0:
-        return 3
+        return 3 # Not active for selected reporting type
     else:
-        return 99
+        return 99 # Continue
 
 # Insert request for report
 def Request_insert(dataframe):
@@ -79,9 +69,6 @@ def Request_insert(dataframe):
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
 
 
-print(Get_section_visibility(Df_sections, 1))
-
-print(Get_section_log_code(Df_sections, 1))
 
 
 
@@ -90,7 +77,7 @@ print(Get_section_log_code(Df_sections, 1))
 
 
        
-Request_insert(Df_request)
+#**************************bRequest_insert(Df_request)
 
 
 # =============================================================================

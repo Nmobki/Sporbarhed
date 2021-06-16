@@ -29,9 +29,9 @@ Request_id = int(time.time() * 100000)
 # =============================================================================
 Server_04 = 'sqlsrv04'
 Db_04 = 'BKI_Datastore'
-Con_04 = pyodbc.connect('DRIVER={SQL Server};SERVER=' + Server_04 + ';DATABASE=' + Db_04)
+Con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={Server_04};DATABASE={Db_04}')
 Params_04 = urllib.parse.quote_plus('DRIVER={SQL Server Native Client 11.0};SERVER=sqlsrv04;DATABASE=BKI_Datastore;Trusted_Connection=yes')
-Engine_04 = create_engine('mssql+pyodbc:///?odbc_connect=%s' % Params_04)
+Engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={Params_04}')
 # =============================================================================
 # Read setup for section for reporttypes
 # =============================================================================

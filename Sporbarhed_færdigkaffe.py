@@ -24,13 +24,25 @@ Input_note = 'test bemærkning ved anfordring bla bla bla'
 Script_name = 'Sporbarhed_færdigkaffe.py'
 Path_files = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests'
 Request_id = int(time.time() * 100000) 
-Reporttypes_sections = {0:['a1','a2'], 1:['b1','b2'], 2:['c1','c2']}
-
+# =============================================================================
+# Variables for various query connections
+# =============================================================================
 Server_04 = 'sqlsrv04'
 Db_04 = 'BKI_Datastore'
 Con_04 = pyodbc.connect('DRIVER={SQL Server};SERVER=' + Server_04 + ';DATABASE=' + Db_04)
 Params_04 = urllib.parse.quote_plus('DRIVER={SQL Server Native Client 11.0};SERVER=sqlsrv04;DATABASE=BKI_Datastore;Trusted_Connection=yes')
 Engine_04 = create_engine('mssql+pyodbc:///?odbc_connect=%s' % Params_04)
+# =============================================================================
+# Read setup for section for reporttypes
+# =============================================================================
+Query_reporttypes =  f"""SELECT [Sektion] ,[Sektion_synlig]
+                       FROM [trc].[Sporbarhed_rapport_sektion]
+                       WHERE [Rapporttype] = {Input_request_type} 
+                       AND [Forespørgselstype] = {Input_report_type}"""
+Df_sections = pd.read_sql(Query_reporttypes, Con_04)
+
+                   
+
 
 #dfCons.to_sql('ItemSegmentation', con=engine, schema='seg', if_exists='append', index=False)
 
@@ -45,6 +57,15 @@ Df_request = pd.DataFrame(data= {'Forespørgselstype':Input_request_type, 'Produ
 print(Request_id)
 print(Df_request)
 
+# Find statuscode for section log
+def Section_log_code(dataframe, visibility):
+    if len(dataframe) == 0:
+        return 1
+    if visibility == 0:
+        return 3
+    else:
+        return 99
+
 # Insert request for report
 def Request_insert(dataframe):
    try:
@@ -52,10 +73,22 @@ def Request_insert(dataframe):
         pd.DataFrame(data={'Event':Script_name,'Note':'Request id: ' + str(Request_id)}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
    except:
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
+
+
+
+
+print(Section_log_code(Df_sections, 1))
+
+
+
+
+
+
+
        
 Request_insert(Df_request)
 
-print('a1' in Reporttypes_sections[0])
+
 # =============================================================================
 #     Insert into relevant table
 #     Insert into sektion log

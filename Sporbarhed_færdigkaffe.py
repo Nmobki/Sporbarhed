@@ -57,8 +57,12 @@ Df_request = pd.DataFrame(data= {'Forespørgselstype':Input_request_type, 'Produ
 print(Request_id)
 print(Df_request)
 
+# Get visibility for section from query
+def Get_section_visibility(dataframe, section):
+    return dataframe['Sektion_synlig'].iloc[section]
+
 # Find statuscode for section log
-def Section_log_code(dataframe, visibility):
+def Get_section_log_code(dataframe, visibility):
     if len(dataframe) == 0:
         return 1
     if visibility == 0:
@@ -75,9 +79,9 @@ def Request_insert(dataframe):
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
 
 
+print(Get_section_visibility(Df_sections, 1))
 
-
-print(Section_log_code(Df_sections, 1))
+print(Get_section_log_code(Df_sections, 1))
 
 
 

@@ -6,13 +6,14 @@ from sqlalchemy import create_engine
 import pyodbc
 import urllib
 import time
+from datetime import datetime
 
 # =============================================================================
 # Variables received from user input || Alle i denne variabel sektion skal laves om til brugerinput
 # =============================================================================
 Input_request_type = 0
 Input_report_type = 0
-Input_order_no = '033242' #BKI Extra
+Input_order_no = '040627' # BKI Øko/Eko Fairtrade mellan 100g / 6kg KRAV
 Input_pdf = 1
 Input_excel = 1
 Input_recipients = 'nmo@bki.dk'
@@ -41,18 +42,50 @@ Query_reporttypes =  f"""SELECT [Sektion] ,[Sektion_synlig]
                        AND [Forespørgselstype] = {Input_report_type}"""
 Df_sections = pd.read_sql(Query_reporttypes, Con_04)
 
+# =============================================================================
+# Queries for different parts of report
+# =============================================================================
+Query_samples = f"""SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
+            	,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
+                ,P.[Beskrivelse] AS [Prøvetype]
+                ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
+                WHEN KP.[Kontrol_mærkning] = 0 THEN 'Ej ok' END AS [Mærkning]
+                ,CASE WHEN KP.[Kontrol_rygsvejning] = 1	THEN 'Ok'
+                WHEN KP.[Kontrol_rygsvejning] = 0 THEN 'Ej ok' END AS [Rygsvejsning]
+                ,CASE WHEN KP.[Kontrol_ventil] = 1 THEN 'Ok'
+                WHEN KP.[Kontrol_ventil] = 0 THEN 'Ej ok' END AS [Ventil]
+                ,CASE WHEN KP.[Kontrol_peelbar] = 1	THEN 'Ok'
+                WHEN KP.[Kontrol_peelbar] = 0 THEN 'Ej ok' END AS [Peelbar]
+                ,CASE WHEN KP.[Kontrol_tintie] = 1 THEN 'Ok'
+                WHEN KP.[Kontrol_tintie] = 0 THEN 'Ej ok' END AS [Tintie]
+                ,KP.[Vægt_aflæst],KP.[Kontrol_ilt],KP.[Silo]
+                ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
+                THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
+                FROM [cof].[Kontrolskema_prøver] AS KP
+                INNER JOIN [cof].[Prøvetype] AS P
+                    ON KP.[Prøvetype] = P.[Id]
+                LEFT JOIN [cof].[Smageskema] AS SK
+                    ON KP.[Id] = SK.[Id_org]
+                    AND SK.[Id_org_kildenummer] = 6
+                WHERE KP.[Ordrenummer] = {Input_order_no} """
+
+# =============================================================================
+# Dataframe with request data
+# =============================================================================
 Df_request = pd.DataFrame(data= {'Forespørgselstype':Input_request_type, 'Produkttype':Input_produkttype,
                                  'Rapporttype':Input_report_type, 'Rapport_modtager':Input_recipients,
                                  'Rapport_filsti':Path_files, 'Rapport_pdf':Input_pdf
                                  ,'Rapport_excel':Input_excel, 'Note_forespørgsel':Input_note
                                  ,'Forespørgsels_id':Request_id}, index=[0])
 
+Df_prøver = pd.read_sql(Query_samples, Con_04)
+
 # Get visibility for section from query
 def Get_section_visibility(dataframe, section):
     return dataframe['Sektion_synlig'].iloc[section]
 
 # Find statuscode for section log
-def Get_section_log_code(dataframe, visibility):
+def Get_section_status_code(dataframe, visibility):
     if len(dataframe) == 0:
         return 1 # Empty dataframe
     if visibility == 0:
@@ -60,24 +93,63 @@ def Get_section_log_code(dataframe, visibility):
     else:
         return 99 # Continue
 
+# Write into section log
+def Section_log_insert(Start, End, Section, Statuscode):
+    Df = {'Sektion':Section, 'Statuskode':Statuscode, 'Start_tid':Start, 'Slut_tid':End}
+    Df.to_sql('Sporbarhed_sektion_log', con=Engine_04, schema='trc', if_exists='append', index=False)
+
 # Insert request for report
-def Request_insert(dataframe):
+def Request_insert(Dataframe):
    try:
-        dataframe.to_sql('Sporbarhed_forespørgsel', con=Engine_04, schema='trc', if_exists='append', index=False)
+        Dataframe.to_sql('Sporbarhed_forespørgsel', con=Engine_04, schema='trc', if_exists='append', index=False)
         pd.DataFrame(data={'Event':Script_name,'Note':f'Request id: {Request_id}'}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
    except:
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
 
 
+# Check for kontrolprøver (18)
+def Kontrolprøver_insert(Dataframe):   
+    X = Get_section_status_code(Dataframe, Get_section_visibility(Df_sections, 18))
+    Start = datetime.now()
+    
+    if X != 99:
+        Section_log_insert(Start, datetime.now(), 18, X)
+        #pd.DataFrame(data={'Event':Script_name,'Note':f'Request id: {Request_id}'}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
+        # Indsæt i sektion log
+    else:
+        x = 'y'
 
 
 
+print(datetime.now())
 
-
-
-
+Kontrolprøver_insert(Df_prøver)
        
 # **************************     Request_insert(Df_request)
+# **************************     Kontrolprøver_insert()
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
+# **************************     
 
 
 # =============================================================================

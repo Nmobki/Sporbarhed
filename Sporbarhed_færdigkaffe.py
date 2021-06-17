@@ -36,7 +36,7 @@ Engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={Params_04}')
 
 # Server_nav = 'sqlsrv03\navision'
 # Db_nav = 'NAV100-DRIFT'
-# Con_nav = pyodbc.connect('DRIVER=SQL Server;SERVER=sqlsrv03\navision;DATABASE=NAV100-DRIFT')
+# Con_nav = pyodbc.connect('DRIVER=ODBC Driver 17 for SQL Server;SERVER=sqlsrv03\navision;DATABASE=NAV100-DRIFT;Trusted_Connection=yes')
 # Params_nav = urllib.parse.quote_plus('DRIVER=SQL Server Native Client 11.0;SERVER=sqlsrv03\navision;DATABASE=NAV100-DRIFT;Trusted_Connection=yes')
 # Engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={Params_nav}')
 
@@ -80,6 +80,9 @@ Query_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
                     ON KP.[Id] = SK.[Id_org]
                     AND SK.[Id_org_kildenummer] = 6
                 WHERE KP.[Ordrenummer] = {Input_order_no} """
+
+Query_nav_færdigvarer = f""" {Input_order_no}
+                        """
 
 # =============================================================================
 # Dataframe with request data
@@ -136,45 +139,4 @@ def Prepared_dataframe(Dataframe,Section_code):
             return Dataframe
         except:
             Section_log_insert(Now, Section_code, 2)
-
-
-
-
-#print(datetime.now())
-
-#print(Prepared_dataframe(Df_prøver ,18))
-       
-# **************************     Request_insert(Df_request)
-# **************************     Kontrolprøver_insert()
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-# **************************     
-
-
-# =============================================================================
-#     Insert into relevant table
-#     Insert into sektion log
-#     Error handling
-#     Types of errors (måske funktion??)
-# =============================================================================
 

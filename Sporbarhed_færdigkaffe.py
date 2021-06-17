@@ -45,7 +45,7 @@ Df_sections = pd.read_sql(Query_reporttypes, Con_04)
 # =============================================================================
 # Queries for different parts of report
 # =============================================================================
-Query_samples = f"""SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
+Query_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
                 ,P.[Beskrivelse] AS [Prøvetype]
                 ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
@@ -94,8 +94,8 @@ def Get_section_status_code(dataframe, visibility):
         return 99 # Continue
 
 # Write into section log
-def Section_log_insert(Start, End, Section, Statuscode):
-    Df = pd.DataFrame(data={'Forespørgsels_id':Request_id,'Sektion':Section, 'Statuskode':Statuscode, 'Start_tid':Start, 'Slut_tid':End}, index=[0])
+def Section_log_insert(Start_time, Section, Statuscode):
+    Df = pd.DataFrame(data={'Forespørgsels_id':Request_id,'Sektion':Section, 'Statuskode':Statuscode, 'Start_tid':Start_time}, index=[0])
     Df.to_sql('Sporbarhed_sektion_log', con=Engine_04, schema='trc', if_exists='append', index=False)
 
 # Insert request for report
@@ -106,26 +106,31 @@ def Request_insert(Dataframe):
    except:
        pass # Evt. bedre error handling her, ved dog ikke hvad. Evt. email?
 
+# Insert steps
+def Step_insert(Step, Status, Start, End, Request_id):
+    return None
 
 # Check for kontrolprøver (18)
 def Prepared_dataframe(Dataframe,Section_code):   
     X = Get_section_status_code(Dataframe, Get_section_visibility(Df_sections, 18))
-    Start = datetime.now()
+    Now = datetime.now()
     
     if X != 99:
-        Section_log_insert(Start, datetime.now(), Section_code, X)
-        #pd.DataFrame(data={'Event':Script_name,'Note':f'Request id: {Request_id}'}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
-        # Indsæt i sektion log
+        Section_log_insert(Now, Section_code, X)
+        return None
     else:
-        Section_log_insert(Start, datetime.now(), Section_code, 0)
-        return Dataframe
-        
+        try:
+            Section_log_insert(Now, Section_code, 0)
+            return Dataframe
+        except:
+            Section_log_insert(Now, Section_code, 2)
 
 
 
-print(datetime.now())
 
-print(Prepared_dataframe(Df_prøver ,18))
+#print(datetime.now())
+
+#print(Prepared_dataframe(Df_prøver ,18))
        
 # **************************     Request_insert(Df_request)
 # **************************     Kontrolprøver_insert()

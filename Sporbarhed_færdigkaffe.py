@@ -95,7 +95,7 @@ def Get_section_status_code(dataframe, visibility):
 
 # Write into section log
 def Section_log_insert(Start, End, Section, Statuscode):
-    Df = {'Sektion':Section, 'Statuskode':Statuscode, 'Start_tid':Start, 'Slut_tid':End}
+    Df = pd.DataFrame(data={'Forespørgsels_id':Request_id,'Sektion':Section, 'Statuskode':Statuscode, 'Start_tid':Start, 'Slut_tid':End}, index=[0])
     Df.to_sql('Sporbarhed_sektion_log', con=Engine_04, schema='trc', if_exists='append', index=False)
 
 # Insert request for report
@@ -108,22 +108,24 @@ def Request_insert(Dataframe):
 
 
 # Check for kontrolprøver (18)
-def Kontrolprøver_insert(Dataframe):   
+def Prepared_dataframe(Dataframe,Section_code):   
     X = Get_section_status_code(Dataframe, Get_section_visibility(Df_sections, 18))
     Start = datetime.now()
     
     if X != 99:
-        Section_log_insert(Start, datetime.now(), 18, X)
+        Section_log_insert(Start, datetime.now(), Section_code, X)
         #pd.DataFrame(data={'Event':Script_name,'Note':f'Request id: {Request_id}'}, index=[0]).to_sql('Log', con=Engine_04, schema='dev', if_exists='append', index=False)
         # Indsæt i sektion log
     else:
-        x = 'y'
+        Section_log_insert(Start, datetime.now(), Section_code, 0)
+        return Dataframe
+        
 
 
 
 print(datetime.now())
 
-Kontrolprøver_insert(Df_prøver)
+print(Prepared_dataframe(Df_prøver ,18))
        
 # **************************     Request_insert(Df_request)
 # **************************     Kontrolprøver_insert()

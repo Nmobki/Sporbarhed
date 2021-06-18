@@ -84,6 +84,43 @@ Query_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
 Query_nav_færdigvarer = f""" {Input_order_no}
                         """
 
+Query_nav_vare = """ SELECT [No_] AS [Varenummer] ,[Description] AS [Navn]
+                     FROM [dbo].[BKI foods a_s$Item]
+                     WHERE [Item Category Code] IN ('FÆR KAFFE','RISTKAFFE','RÅKAFFE')
+                     [No_] NOT LIKE '9%' """
+# =============================================================================
+# Variables based on queries above nessecary for queries below
+# =============================================================================
+Lotnumbers = ()
+Probat_mølleordrer = ()
+# =============================================================================
+# Queries using variables based on previous queries                        
+# =============================================================================
+Query_nav_customers = f""" SELECT ILE.[Source No_] AS [Debitornummer]
+                    	,C.[Name] AS [Navn]	,ILE.[Posting Date] AS [Dato]
+                        E.[Item No_] AS [Varenummerr]
+                        E.[Quantity] * -1 AS [Antal]
+                        E.[Quantity] * I.[Net Weight] * -1 AS [Nettovægt]
+                        FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
+                        INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                        ON ILE.[Item No_] = I.[No_]
+                        INNER JOIN [dbo].[BKI foods a_s$Customer] AS C
+                        ON ILE.[Source No_] = C.[No_]
+                        WHERE ILE.[Entry Type] = 1
+                         ILE.[Lot No_] IN {Lotnumbers} """ 
+                         
+Query_probat_mølleordrer = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                                ,[PRODUCTION_ORDER_ID] AS [Probat id]
+                                ,[SOURCE_NAME] AS [Mølle] ,[ORDER_NAME] AS [Ordrenummer]
+                            	,[D_CUSTOMER_CODE] AS [Receptnummer]
+                            	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                                WHERE [ORDER_NAME] IN {Probat_mølleordrer}
+                                GROUP BY 
+                            	DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                            	,[PRODUCTION_ORDER_ID] ,[SOURCE_NAME]
+                            	,[ORDER_NAME] ,[D_CUSTOMER_CODE] """
+
 # =============================================================================
 # Dataframe with request data
 # =============================================================================

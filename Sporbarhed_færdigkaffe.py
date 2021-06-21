@@ -7,6 +7,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import pyodbc
 import docx
+import openpyxl
 
 # =============================================================================
 # Variables for query connections
@@ -33,11 +34,11 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 # Read data from request
 # =============================================================================
-query_request =  """SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Produkttype]
+query_ds_request =  """SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Produkttype]
                     ,[Rapporttype] ,[Rapport_modtager] ,[Rapport_pdf], [Ordrenummer]
                     ,[Rapport_excel] ,[Note_forespørgsel] FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL"""
-df_request = pd.read_sql(query_request, con_04)
+df_request = pd.read_sql(query_ds_request, con_04)
 
 # Exit script if no request data is found
 if len(df_request) == 0:
@@ -55,73 +56,56 @@ req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_produkttype = df_request.loc[0, 'Produkttype'] # Behov for denne her?
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
-
+# =============================================================================
+# Variables for files generated
+# =============================================================================
 script_name = 'Sporbarhed_færdigkaffe.py'
-filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests' #Ændre ifbm. drift
+filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests' # Ændre ifbm. drift
 doc = docx.Document()
 doc_name = f'Sporbarhedstest_{req_order_no}_{req_id}.docx'
-path_file = filepath + r'\\' + doc_name
+path_file_doc = filepath + r'\\' + doc_name
+wb = openpyxl.Workbook()
+wb_name = f'Sporbarhedstest_{req_order_no}_{req_id}.xlsx'
+path_file_wb = filepath + r'\\' + wb_name
+
 
 # =============================================================================
 # Read setup for section for reporttypes
 # =============================================================================
-query_reporttypes =  f"""SELECT [Sektion] ,[Sektion_synlig]
-                       FROM [trc].[Sporbarhed_rapport_sektion]
+query_ds_reporttypes =  f"""SELECT SRS.[Sektion] ,SRS.[Sektion_synlig] ,SS.[Beskrivelse] AS [Sektion navn]
+                       FROM [trc].[Sporbarhed_rapport_sektion] AS SRS
+					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
+					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Rapporttype] = {req_type} 
                        AND [Forespørgselstype] = {req_report_type}"""
-df_sections = pd.read_sql(query_reporttypes, con_04)
+df_sections = pd.read_sql(query_ds_reporttypes, con_04)
 
 # =============================================================================
 # Queries for different parts of report
 # =============================================================================
-query_generelt = f"""WITH [KP] AS (
-SELECT
-	[Ordrenummer]
-	,SUM( CASE WHEN [Prøvetype] = 0 THEN [Antal_prøver] ELSE 0 END) AS [Kontrolprøve]
-	,SUM( CASE WHEN [Prøvetype] = 1 THEN [Antal_prøver] ELSE 0 END) AS [Referenceprøve]
-	,SUM( CASE WHEN [Prøvetype] = 2 THEN [Antal_prøver] ELSE 0 END) AS [Henstandsprøve]
-FROM [cof].[Kontrolskema_prøver]
-GROUP BY
-	[Ordrenummer]
-)
-,[SK] AS (
-SELECT
-	[Referencenummer]
-	,MAX([Status]) AS [Status]
-FROM [cof].[Smageskema]
-WHERE [Referencetype] = 2
-GROUP BY [Referencenummer]
-)
+query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
+                	,SUM( CASE WHEN [Prøvetype] = 0 THEN [Antal_prøver] ELSE 0 END) AS [Kontrolprøve]
+                	,SUM( CASE WHEN [Prøvetype] = 1 THEN [Antal_prøver] ELSE 0 END) AS [Referenceprøve]
+                	,SUM( CASE WHEN [Prøvetype] = 2 THEN [Antal_prøver] ELSE 0 END) AS [Henstandsprøve]
+                    FROM [cof].[Kontrolskema_prøver]
+                    GROUP BY [Ordrenummer] )
+                    ,[SK] AS ( SELECT [Referencenummer] ,MAX([Status]) AS [Status]
+                    FROM [cof].[Smageskema] WHERE [Referencetype] = 2
+                    GROUP BY [Referencenummer] )
+                    SELECT SF.[Ordrenummer] ,SF.[Pakketidspunkt] ,KH.[Igangsat_af] AS [Igangsat af]
+                    ,KH.[Silo_opstart] AS [Opstartssilo] ,KH.[Taravægt] ,KH.[Nitrogen]
+                    ,KH.[Bemærkning] AS [Bemærkning opstart] ,ISNULL(KP.[Kontrolprøve] ,0) AS [Kontrolprøver]
+                    ,ISNULL(KP.[Referenceprøve] ,0) AS [Referenceprøver]
+                    ,ISNULL(KP.[Henstandsprøve] ,0) AS [Henstandsprøver]
+                    ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0 THEN 'Afvist'
+                    ELSE 'Ej smagt' END AS [Smagning status]
+                    FROM [trc].[Sporbarhed_forespørgsel] AS SF
+                    LEFT JOIN [cof].[Kontrolskema_hoved] AS KH ON SF.[Ordrenummer] = KH.[Ordrenummer]
+                    LEFT JOIN [KP] ON SF.[Ordrenummer] = KP.[Ordrenummer]
+                    LEFT JOIN [SK] ON SF.[Ordrenummer] = SK.[Referencenummer]
+                    WHERE SF.[Id] = {req_id} """
 
-SELECT
-	SF.[Ordrenummer]
-	,SF.[Pakketidspunkt]
-	,KH.[Igangsat_af] AS [Igangsat af]
-	,KH.[Silo_opstart] AS [Opstartssilo]
-	,KH.[Taravægt]
-	,KH.[Nitrogen]
-	,KH.[Bemærkning] AS [Bemærkning opstart]
-	,ISNULL(KP.[Kontrolprøve] ,0) AS [Kontrolprøver]
-	,ISNULL(KP.[Referenceprøve] ,0) AS [Referenceprøver]
-	,ISNULL(KP.[Henstandsprøve] ,0) AS [Henstandsprøver]
-	,CASE
-		WHEN SK.[Status] = 1
-			THEN 'Godkendt'
-		WHEN SK.[Status] = 0
-			THEN 'Afvist'
-		ELSE 'Ej smagt'
-	END AS [Smagning status]
-FROM [trc].[Sporbarhed_forespørgsel] AS SF
-LEFT JOIN [cof].[Kontrolskema_hoved] AS KH
-	ON SF.[Ordrenummer] = KH.[Ordrenummer]
-LEFT JOIN [KP]
-	ON SF.[Ordrenummer] = KP.[Ordrenummer]
-LEFT JOIN [SK]
-	ON SF.[Ordrenummer] = SK.[Referencenummer]
-WHERE SF.[Id] = 1 -- Ret til f-string i Python
-                """
-
-query_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
+query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
                 ,P.[Beskrivelse] AS [Prøvetype]
                 ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
@@ -176,13 +160,21 @@ query_probat_mølleordrer = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DAT
                             	,[PRODUCTION_ORDER_ID] ,[SOURCE_NAME]
                             	,[ORDER_NAME] ,[D_CUSTOMER_CODE] """
 
+df_results_generelt = pd.read_sql(query_ds_generelt, con_04) # 0
+df_prøver = pd.read_sql(query_ds_samples, con_04)
 
-
-df_prøver = pd.read_sql(query_samples, con_04)
 
 # Get visibility for section from query
 def get_section_visibility(dataframe, section):
     return dataframe['Sektion_synlig'].iloc[section]
+
+# Get section name for section from query
+def get_section_name(dataframe, section):
+    x = dataframe['Sektion navn'].iloc[section]
+    if len(x) == 0:
+        return 'Sektion ' + str(section)
+    else:
+        return x
 
 # Find statuscode for section log
 def get_section_status_code(dataframe, visibility):
@@ -194,45 +186,62 @@ def get_section_status_code(dataframe, visibility):
         return 99 # Continue
 
 # Write into section log
-def section_log_insert(start_time ,section ,statuscode):
+def section_log_insert(start_time, section, statuscode):
     df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode, 'Start_tid':start_time}, index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
+# Write dataframe into Excel sheet           
+def insert_dataframe_into_excel (dataframe, sheetname):
+    dataframe.to_excel(path_file_wb, sheet_name=sheetname)
+    
+    
 
-# Insert steps
-def Step_insert(Step, Status, Start, End, Request_id):
-    return None
+# =============================================================================
+# Section 0: Generelt
+# =============================================================================
+section = 0
+timestamp = datetime.now()
+if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section)) == 99:
+    try:
+        df_results_generelt['Varenr'] = '12345678'
+        # Skriv i Word dokument og Excel
+        insert_dataframe_into_excel (df_results_generelt.transpose(), 'Generelt')
+        section_log_insert(timestamp, section, 0)
+    except:
+        # Hvis fejl
+        section_log_insert(timestamp, section, 2)
+else:
+    # Skriv statuskode
+    section_log_insert(timestamp, section, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section)))
+    
 
-# Check for kontrolprøver (18)
-def prepared_dataframe(dataframe ,section_code):
-    status_code = get_section_status_code(dataframe ,get_section_visibility(df_sections, section_code))
-    now = datetime.now()
-
-    if status_code != 99:
-        section_log_insert(now, section_code, status_code)
-        return None
-    else:
-        try:
-            section_log_insert(now, section_code, 0)
-            return dataframe
-        except:
-            section_log_insert(now, section_code, 2)
 
 
-doc.add_paragraph('Test tekst!!!')
-doc.save(path_file)
+# =============================================================================
+# 
+# Indsæt i Excel    
+# insert_dataframe_into_excel(df_results_generelt, 'Generelt')
+# 
+# Nogenlunde indsæt i Word
+# doc.add_paragraph('Test tekst!!!')
+# doc.save(path_file_doc)
+# =============================================================================
+
+
 
 # =============================================================================
 # # Dette må være flowet for dannelse af dataframes..
-# if get_section_status_code(dataframe, Get_section_visibility(dataframe, section)) == 99:
+# if get_section_status_code(dataframe, get_section_visibility(dataframe, section)) == 99:
 #     try:
 #         # Forbered dataframe
-#         Section_log_insert(Now, Section_code, 0)
+#         # Skriv i Word dokument og Excel
+#         # Skriv i Excel: insert_dataframe_into_excel (dataframe, sheetname)
+#         section_log_insert(timestamp, section_code, 0)
 #     except:
 #         # Hvis fejl
-#         Section_log_insert(Now, Section_code, 2)
+#         section_log_insert(timestamp, section_code, 2)
 # else:
 #     # Skriv statuskode
-#     Section_log_insert(Now, Section_code, Get_section_status_code(Dataframe, Get_section_visibility(Df_sections, Section_code)))
+#     section_log_insert(timestamp, section_code, get_section_status_code(Dataframe, get_section_visibility(df_sections, section_code)))
 #
 # =============================================================================

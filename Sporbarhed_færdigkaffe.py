@@ -197,9 +197,9 @@ def insert_dataframe_into_excel (dataframe, sheetname):
 # =============================================================================
 # Section 0: Generelt
 # =============================================================================
-section_no = 0
+section_id = 0
 timestamp = datetime.now()
-if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_no)) == 99:
+if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_results_generelt['Varenummer'] = '12345678'
         df_results_generelt['Varenavn'] = 'varenavn'
@@ -214,13 +214,13 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework afgang'] = '1'
         df_results_generelt['Prod.ordre status'] = 'Færdig'
         # Skriv i Word dokument og Excel
-        insert_dataframe_into_excel (df_results_generelt.transpose(), get_section_name(section_no))
-        section_log_insert(timestamp, section_no, 0)
+        insert_dataframe_into_excel (df_results_generelt.transpose(), get_section_name(section_id))
+        section_log_insert(timestamp, section_id, 0)
     except: # Statuskode hvis fejl opstår
         # Hvis fejl
-        section_log_insert(timestamp, section_no, 2)
+        section_log_insert(timestamp, section_id, 2)
 else: # Statuskode hvis ingen data eller sektion fravalgt og ingen fejl er opstået
-    section_log_insert(timestamp, section_no, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_no)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
     
 
 

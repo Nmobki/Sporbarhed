@@ -169,8 +169,8 @@ def get_section_visibility(dataframe, section):
     return dataframe['Sektion_synlig'].iloc[section]
 
 # Get section name for section from query
-def get_section_name(dataframe, section):
-    x = dataframe['Sektion navn'].iloc[section]
+def get_section_name(section):
+    x = df_sections['Sektion navn'].iloc[section]
     if len(x) == 0:
         return 'Sektion ' + str(section)
     else:
@@ -194,25 +194,33 @@ def section_log_insert(start_time, section, statuscode):
 def insert_dataframe_into_excel (dataframe, sheetname):
     dataframe.to_excel(path_file_wb, sheet_name=sheetname)
     
-    
-
 # =============================================================================
 # Section 0: Generelt
 # =============================================================================
-section = 0
+section_no = 0
 timestamp = datetime.now()
-if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section)) == 99:
+if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_no)) == 99:
     try:
-        df_results_generelt['Varenr'] = '12345678'
+        df_results_generelt['Varenummer'] = '12345678'
+        df_results_generelt['Varenavn'] = 'varenavn'
+        df_results_generelt['Basisenhed'] = 'KRT'
+        df_results_generelt['Receptnummer'] = '10401234'
+        df_results_generelt['Produktionsdato'] = '2021-02-03,2021-02-04'
+        df_results_generelt['Stregkode'] = '00000413547'
+        df_results_generelt['Lotnumre produceret'] = '17'
+        df_results_generelt['Slat tilgang'] = '5'
+        df_results_generelt['Slat afgang'] = '5'
+        df_results_generelt['Rework tilgang'] = '2'
+        df_results_generelt['Rework afgang'] = '1'
+        df_results_generelt['Prod.ordre status'] = 'Færdig'
         # Skriv i Word dokument og Excel
-        insert_dataframe_into_excel (df_results_generelt.transpose(), 'Generelt')
-        section_log_insert(timestamp, section, 0)
-    except:
+        insert_dataframe_into_excel (df_results_generelt.transpose(), get_section_name(section_no))
+        section_log_insert(timestamp, section_no, 0)
+    except: # Statuskode hvis fejl opstår
         # Hvis fejl
-        section_log_insert(timestamp, section, 2)
-else:
-    # Skriv statuskode
-    section_log_insert(timestamp, section, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section)))
+        section_log_insert(timestamp, section_no, 2)
+else: # Statuskode hvis ingen data eller sektion fravalgt og ingen fejl er opstået
+    section_log_insert(timestamp, section_no, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_no)))
     
 
 

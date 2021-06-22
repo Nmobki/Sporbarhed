@@ -78,7 +78,7 @@ query_ds_reporttypes =  f"""SELECT SRS.[Sektion] ,SRS.[Sektion_synlig] ,SS.[Besk
 					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Rapporttype] = {req_type} 
                        AND [Forespørgselstype] = {req_report_type}"""
-df_sections = pd.read_sql(query_ds_reporttypes, con_04)
+df_sections = pd.read_sql(query_ds_reporttypes, con_04)#.set_index('Sektion')
 
 # =============================================================================
 # Queries for different parts of report
@@ -105,7 +105,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     LEFT JOIN [SK] ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
 
-query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
+query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	   ,KP.[Registreret_af] AS [Operatør],KP.[Bemærkning]
                    ,KP.[Prøvetype] AS [Prøvetype int],P.[Beskrivelse] AS [Prøvetype]
                    ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
@@ -123,6 +123,7 @@ query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
                    ,KP.[Vægt_aflæst] AS [Vægt],KP.[Kontrol_ilt] AS [Ilt],KP.[Silo]
                    ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
                    THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
+				   ,KP.[Antal_prøver] AS [Antal prøver]
                    FROM [cof].[Kontrolskema_prøver] AS KP
                    INNER JOIN [cof].[Prøvetype] AS P
                         ON KP.[Prøvetype] = P.[Id]
@@ -180,7 +181,7 @@ def get_section_visibility(dataframe, section):
 
 # Get section name for section from query
 def get_section_name(section):
-    x = df_sections['Sektion navn'].iloc[section]
+    x = df_sections['Sektion navn'].iloc[section-1]
     if len(x) == 0 or len(x) > 31:
         return 'Sektion ' + str(section)
     else:
@@ -244,11 +245,6 @@ else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
 
 
-
-
-
-
-
 # =============================================================================
 # Section 12: Karakterer
 # =============================================================================
@@ -270,6 +266,32 @@ else: # Write into log if no data is found or section is out of scope
 
 
 
+# =============================================================================
+# Section 16: Reference- og henstandsprøver
+# =============================================================================
+section_id = 16
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Id', 'Registreringstidspunkt', 'Operatør', 'Silo', 'Prøvetype',
+                'Bemærkning', 'Smagning status', 'Antal prøver']
+df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
+df_temp = df_temp[column_order]
+
+if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_temp, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+
+
+
+
 
 # =============================================================================
 # Section 17: Udtagne kontrolprøver
@@ -277,7 +299,7 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 17
 section_name = get_section_name(section_id)
 timestamp = datetime.now()
-column_order = ['Registreringstidspunkt', 'Operatør', 'Bemærkning',
+column_order = ['Id','Registreringstidspunkt', 'Operatør', 'Bemærkning',
                 'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
                 'Tintie', 'Vægt', 'Ilt']
 df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]

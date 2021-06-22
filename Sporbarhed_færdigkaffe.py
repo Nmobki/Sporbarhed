@@ -34,10 +34,9 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 # Read data from request
 # =============================================================================
-query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Produkttype]
-                    ,[Rapporttype] ,[Rapport_modtager] ,[Rapport_pdf]
-                    , [Referencenummer] AS [Ordrenummer]
-                    ,[Rapport_excel] ,[Note_forespørgsel] 
+query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Rapporttype]
+                    ,[Rapport_modtager] 
+                    ,[Referencenummer] AS [Ordrenummer] ,[Note_forespørgsel] 
                     FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL
                     AND [Referencetype] = 0 AND [Forespørgselstype] = 0 """
@@ -53,12 +52,10 @@ if len(df_request) == 0:
 req_type = df_request.loc[0, 'Forespørgselstype']
 req_report_type = df_request.loc[0, 'Rapporttype']
 req_order_no = df_request.loc[0, 'Ordrenummer']
-req_pdf = df_request.loc[0, 'Rapport_pdf']
-req_excel = df_request.loc[0, 'Rapport_excel']
 req_recipients = df_request.loc[0, 'Rapport_modtager']
-req_produkttype = df_request.loc[0, 'Produkttype'] # Behov for denne her?
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
+
 # =============================================================================
 # Variables for files generated
 # =============================================================================
@@ -70,7 +67,7 @@ path_file_doc = filepath + r'\\' + doc_name
 wb = openpyxl.Workbook()
 wb_name = f'Sporbarhedstest_{req_order_no}_{req_id}.xlsx'
 path_file_wb = filepath + r'\\' + wb_name
-
+excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
 
 # =============================================================================
 # Read setup for section for reporttypes
@@ -101,7 +98,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     ,ISNULL(KP.[Referenceprøve] ,0) AS [Referenceprøver]
                     ,ISNULL(KP.[Henstandsprøve] ,0) AS [Henstandsprøver]
                     ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0 THEN 'Afvist'
-                    ELSE 'Ej smagt' END AS [Smagning status]
+                    ELSE 'Ej smagt' END AS [Smagning status], KH.[Pakkelinje]
                     FROM [trc].[Sporbarhed_forespørgsel] AS SF
                     LEFT JOIN [cof].[Kontrolskema_hoved] AS KH ON SF.[Referencenummer] = KH.[Ordrenummer]
                     LEFT JOIN [KP] ON SF.[Referencenummer] = KP.[Ordrenummer]
@@ -109,28 +106,35 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     WHERE SF.[Id] = {req_id} """
 
 query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
-            	,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
-                ,P.[Beskrivelse] AS [Prøvetype]
-                ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
-                WHEN KP.[Kontrol_mærkning] = 0 THEN 'Ej ok' END AS [Mærkning]
-                ,CASE WHEN KP.[Kontrol_rygsvejning] = 1	THEN 'Ok'
-                WHEN KP.[Kontrol_rygsvejning] = 0 THEN 'Ej ok' END AS [Rygsvejsning]
-                ,CASE WHEN KP.[Kontrol_ventil] = 1 THEN 'Ok'
-                WHEN KP.[Kontrol_ventil] = 0 THEN 'Ej ok' END AS [Ventil]
-                ,CASE WHEN KP.[Kontrol_peelbar] = 1	THEN 'Ok'
-                WHEN KP.[Kontrol_peelbar] = 0 THEN 'Ej ok' END AS [Peelbar]
-                ,CASE WHEN KP.[Kontrol_tintie] = 1 THEN 'Ok'
-                WHEN KP.[Kontrol_tintie] = 0 THEN 'Ej ok' END AS [Tintie]
-                ,KP.[Vægt_aflæst],KP.[Kontrol_ilt],KP.[Silo]
-                ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
-                THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
-                FROM [cof].[Kontrolskema_prøver] AS KP
-                INNER JOIN [cof].[Prøvetype] AS P
-                    ON KP.[Prøvetype] = P.[Id]
-                LEFT JOIN [cof].[Smageskema] AS SK
-                    ON KP.[Id] = SK.[Id_org]
-                    AND SK.[Id_org_kildenummer] = 6
-                WHERE KP.[Ordrenummer] = {req_order_no} """
+            	   ,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
+                   ,P.[Beskrivelse] AS [Prøvetype]
+                   ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
+                   WHEN KP.[Kontrol_mærkning] = 0 THEN 'Ej ok' END AS [Mærkning]
+                   ,CASE WHEN KP.[Kontrol_rygsvejning] = 1	THEN 'Ok'
+                   WHEN KP.[Kontrol_rygsvejning] = 0 THEN 'Ej ok' END AS [Rygsvejsning]
+                   ,CASE WHEN KP.[Kontrol_ventil] = 1 THEN 'Ok'
+                   WHEN KP.[Kontrol_ventil] = 0 THEN 'Ej ok' END AS [Ventil]
+                   ,CASE WHEN KP.[Kontrol_peelbar] = 1	THEN 'Ok'
+                   WHEN KP.[Kontrol_peelbar] = 0 THEN 'Ej ok' END AS [Peelbar]
+                   ,CASE WHEN KP.[Kontrol_tintie] = 1 THEN 'Ok'
+                   WHEN KP.[Kontrol_tintie] = 0 THEN 'Ej ok' END AS [Tintie]
+                   ,KP.[Vægt_aflæst],KP.[Kontrol_ilt],KP.[Silo]
+                   ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
+                   THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
+                   FROM [cof].[Kontrolskema_prøver] AS KP
+                   INNER JOIN [cof].[Prøvetype] AS P
+                        ON KP.[Prøvetype] = P.[Id]
+                   LEFT JOIN [cof].[Smageskema] AS SK
+                       ON KP.[Id] = SK.[Id_org]
+                       AND SK.[Id_org_kildenummer] = 6
+                   WHERE KP.[Ordrenummer] = {req_order_no} """
+
+query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre]
+                      ,[Smag_Krop] ,[Smag_Aroma] ,[Smag_Eftersmag]
+                      ,[Smag_Robusta] ,[Bemærkning]
+                      FROM [cof].[Smageskema]
+                      WHERE [Referencetype] = 2	
+                          AND [Referencenummer] = {req_order_no} """
 
 query_nav_færdigvarer = f""" {req_order_no}
                         """
@@ -138,7 +142,7 @@ query_nav_færdigvarer = f""" {req_order_no}
 query_nav_vare = """ SELECT [No_] AS [Varenummer] ,[Description] AS [Navn]
                      FROM [dbo].[BKI foods a_s$Item]
                      WHERE [Item Category Code] IN ('FÆR KAFFE','RISTKAFFE','RÅKAFFE')
-                     [No_] NOT LIKE '9%' """
+                         AND [No_] NOT LIKE '9%' """
 
 # =============================================================================
 # Variables based on queries above nessecary for queries below
@@ -163,8 +167,9 @@ query_probat_mølleordrer = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DAT
                             	,[PRODUCTION_ORDER_ID] ,[SOURCE_NAME]
                             	,[ORDER_NAME] ,[D_CUSTOMER_CODE] """
 
-df_results_generelt = pd.read_sql(query_ds_generelt, con_04) # 0
+df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
 df_prøver = pd.read_sql(query_ds_samples, con_04)
+df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
 
 # Get visibility for section from query
@@ -174,7 +179,7 @@ def get_section_visibility(dataframe, section):
 # Get section name for section from query
 def get_section_name(section):
     x = df_sections['Sektion navn'].iloc[section]
-    if len(x) == 0:
+    if len(x) == 0 or len(x) > 31:
         return 'Sektion ' + str(section)
     else:
         return x
@@ -193,16 +198,23 @@ def section_log_insert(start_time, section, statuscode):
     df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode, 'Start_tid':start_time}, index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
-# Write dataframe into Excel sheet           
+# Write dataframe into Excel sheet
 def insert_dataframe_into_excel (dataframe, sheetname):
-    dataframe.to_excel(path_file_wb, sheet_name=sheetname)
-    
+    dataframe.to_excel(excel_writer, sheet_name=sheetname)
+
+
 # =============================================================================
-# Section 0: Generelt
+# Section 1: Generelt
 # =============================================================================
-section_id = 0
+section_id = 1
 section_name = get_section_name(section_id)
 timestamp = datetime.now()
+column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkelinje',
+                'Produktionsdato', 'Pakketidspunkt', 'Stregkode', 'Ordrenummer',
+                'Smagning status', 'Opstartssilo', 'Igangsat af', 'Taravægt',
+                'Nitrogen', 'Henstandsprøver', 'Referenceprøver', 'Kontrolprøver',
+                'Bemærkning opstart', 'Lotnumre produceret', 'Slat tilgang',
+                'Slat afgang', 'Rework tilgang', 'Rework afgang' ,'Prod.ordre status']
 
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -218,28 +230,66 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework tilgang'] = '2'
         df_results_generelt['Rework afgang'] = '1'
         df_results_generelt['Prod.ordre status'] = 'Færdig'
+        df_results_generelt = df_results_generelt[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt.transpose(), section_name)
+        # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
-    
+
+
+
+
 
 
 
 # =============================================================================
-# 
-# Indsæt i Excel    
+# Section 12: Karakterer
+# =============================================================================
+section_id = 12
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+
+if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_karakterer, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
+
+
+
+
+# =============================================================================
+# Section 17: Udtagne kontrolprøver
+# =============================================================================
+
+
+
+# =============================================================================
+#
+# Indsæt i Excel
 # insert_dataframe_into_excel(df_results_generelt, 'Generelt')
-# 
+#
 # Nogenlunde indsæt i Word
 # doc.add_paragraph('Test tekst!!!')
 # doc.save(path_file_doc)
 # =============================================================================
 
+
+#Save files
+excel_writer.save()
+# *** TODO SAVE WORD DOCUMENT
+# *** TODO SAVE PDF FILE
 
 
 # =============================================================================

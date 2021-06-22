@@ -106,8 +106,8 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     WHERE SF.[Id] = {req_id} """
 
 query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
-            	   ,KP.[Registreret_af],KP.[Bemærkning],KP.[Prøvetype] AS [Prøvetype int]
-                   ,P.[Beskrivelse] AS [Prøvetype]
+            	   ,KP.[Registreret_af] AS [Operatør],KP.[Bemærkning]
+                   ,KP.[Prøvetype] AS [Prøvetype int],P.[Beskrivelse] AS [Prøvetype]
                    ,CASE WHEN KP.[Kontrol_mærkning] = 1 THEN 'Ok' 
                    WHEN KP.[Kontrol_mærkning] = 0 THEN 'Ej ok' END AS [Mærkning]
                    ,CASE WHEN KP.[Kontrol_rygsvejning] = 1	THEN 'Ok'
@@ -118,7 +118,9 @@ query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
                    WHEN KP.[Kontrol_peelbar] = 0 THEN 'Ej ok' END AS [Peelbar]
                    ,CASE WHEN KP.[Kontrol_tintie] = 1 THEN 'Ok'
                    WHEN KP.[Kontrol_tintie] = 0 THEN 'Ej ok' END AS [Tintie]
-                   ,KP.[Vægt_aflæst],KP.[Kontrol_ilt],KP.[Silo]
+				   ,CASE WHEN KP.[Kontrol_tæthed] = 1 THEN 'Ok'
+                   WHEN KP.[Kontrol_tæthed] = 0 THEN 'Ej ok' END AS [Tæthed]
+                   ,KP.[Vægt_aflæst] AS [Vægt],KP.[Kontrol_ilt] AS [Ilt],KP.[Silo]
                    ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
                    THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
                    FROM [cof].[Kontrolskema_prøver] AS KP
@@ -272,6 +274,26 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 # Section 17: Udtagne kontrolprøver
 # =============================================================================
+section_id = 17
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Registreringstidspunkt', 'Operatør', 'Bemærkning',
+                'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
+                'Tintie', 'Vægt', 'Ilt']
+df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
+df_temp = df_temp[column_order]
+
+if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_temp, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
 
 
 

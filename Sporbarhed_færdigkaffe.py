@@ -26,7 +26,7 @@ db_nav = 'NAV100-DRIFT'
 # params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
 # engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
 
-server_comscale = 'comscale-bki\sqlexpress'
+server_comscale = r'comscale-bki\sqlexpress'
 db_comscale = 'ComScaleDB'
 con_comscale = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_comscale};DATABASE={db_comscale}')
 params_comscale = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_comscale};DATABASE={db_comscale};Trusted_Connection=yes')
@@ -149,6 +149,17 @@ query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre]
                           AND [Referencenummer] = '{req_order_no}' """
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
+query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
+                       ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
+                       ,SL.[Start_tid],SL.[Registreringstidspunkt] AS [Slut tid]
+                	   ,DATEDIFF(ms, SL.[Start_tid] ,SL.[Registreringstidspunkt]) / 1000.0 AS [Sekunder]
+                       FROM [trc].[Sporbarhed_sektion_log] AS SL
+                       INNER JOIN [trc].[Sporbarhed_sektion] AS S
+                         	ON SL.[Sektion] = S.[Id]
+                       INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
+                            ON SL.[Statuskode] = SS.[Id]
+                       WHERE SL.[Forespørgsels_id] = {req_id} """
+
 query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                             ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
                             ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
@@ -244,6 +255,39 @@ else: # Write into log if no data is found or section is out of scope
 
 
 # =============================================================================
+# Section 8: Massebalance
+# =============================================================================
+section_id = 8
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+dict_massebalance = {'[1] Råkaffe': 100,
+                     '[2] Ristet kaffe': 90,
+                     '[3] Difference': 0,
+                     '[4] Færdigvaretilgang': 88,
+                     '[5] Difference': 0,
+                     '[6] Salg': 83,
+                     '[7] Kassation & ompak': 2,
+                     '[8] Restlager': 3,
+                     '[9] Difference': 0 }
+dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
+dict_massebalance['[5] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[4] Færdigvaretilgang']
+dict_massebalance['[9] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
+df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
+
+if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_massebalance, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
 # Section 11: Ordrestatistik fra e-vejning
 # =============================================================================
 section_id = 11
@@ -334,6 +378,27 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 18: Sektionslog
+# =============================================================================
+section_id = 18
+df_section_log = pd.read_sql(query_ds_section_log, con_04)
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+
+if get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_section_log, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================

@@ -9,6 +9,7 @@ import pyodbc
 import docx
 import openpyxl
 
+
 # =============================================================================
 # Variables for query connections
 # =============================================================================
@@ -24,6 +25,12 @@ db_nav = 'NAV100-DRIFT'
 # con_nav = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
 # params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
 # engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
+
+server_comscale = 'comscale-bki\sqlexpress'
+db_comscale = 'ComScaleDB'
+con_comscale = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_comscale};DATABASE={db_comscale}')
+params_comscale = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_comscale};DATABASE={db_comscale};Trusted_Connection=yes')
+engine_comscale = create_engine(f'mssql+pyodbc:///?odbc_connect={params_comscale}')
 
 server_probat = '192.168.125.161'
 db_probat = 'BKI_IMP_EXP'
@@ -78,7 +85,7 @@ query_ds_reporttypes =  f"""SELECT SRS.[Sektion] ,SRS.[Sektion_synlig] ,SS.[Besk
 					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Rapporttype] = {req_type} 
                        AND [Forespørgselstype] = {req_report_type}"""
-df_sections = pd.read_sql(query_ds_reporttypes, con_04)#.set_index('Sektion')
+df_sections = pd.read_sql(query_ds_reporttypes, con_04)
 
 # =============================================================================
 # Queries for different parts of report
@@ -104,6 +111,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     LEFT JOIN [KP] ON SF.[Referencenummer] = KP.[Ordrenummer]
                     LEFT JOIN [SK] ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
+df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
 
 query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	   ,KP.[Registreret_af] AS [Operatør],KP.[Bemærkning]
@@ -130,50 +138,40 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    LEFT JOIN [cof].[Smageskema] AS SK
                        ON KP.[Id] = SK.[Id_org]
                        AND SK.[Id_org_kildenummer] = 6
-                   WHERE KP.[Ordrenummer] = {req_order_no} """
+                   WHERE KP.[Ordrenummer] = '{req_order_no}' """
+df_prøver = pd.read_sql(query_ds_samples, con_04)
 
 query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre]
                       ,[Smag_Krop] ,[Smag_Aroma] ,[Smag_Eftersmag]
                       ,[Smag_Robusta] ,[Bemærkning]
                       FROM [cof].[Smageskema]
                       WHERE [Referencetype] = 2	
-                          AND [Referencenummer] = {req_order_no} """
-
-query_nav_færdigvarer = f""" {req_order_no}
-                        """
-
-query_nav_vare = """ SELECT [No_] AS [Varenummer] ,[Description] AS [Navn]
-                     FROM [dbo].[BKI foods a_s$Item]
-                     WHERE [Item Category Code] IN ('FÆR KAFFE','RISTKAFFE','RÅKAFFE')
-                         AND [No_] NOT LIKE '9%' """
-
-# =============================================================================
-# Variables based on queries above nessecary for queries below
-# =============================================================================
-Lotnumbers = ()
-Probat_mølleordrer = ()
-
-# =============================================================================
-# Queries using variables based on previous queries
-# =============================================================================
-query_nav_customers = f""" {Lotnumbers} """
-
-query_probat_mølleordrer = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                                ,[PRODUCTION_ORDER_ID] AS [Probat id]
-                                ,[SOURCE_NAME] AS [Mølle] ,[ORDER_NAME] AS [Ordrenummer]
-                            	,[D_CUSTOMER_CODE] AS [Receptnummer]
-                            	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
-                                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                                WHERE [ORDER_NAME] IN {Probat_mølleordrer}
-                                GROUP BY 
-                            	DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                            	,[PRODUCTION_ORDER_ID] ,[SOURCE_NAME]
-                            	,[ORDER_NAME] ,[D_CUSTOMER_CODE] """
-
-df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
-df_prøver = pd.read_sql(query_ds_samples, con_04)
+                          AND [Referencenummer] = '{req_order_no}' """
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
+query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
+                            ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
+                            ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
+                        	,SUM( SD.[CounterGoodTrade] ) AS [Antal enheder]
+                        FROM [ComScaleDB].[dbo].[StatisticData] AS SD
+                        INNER JOIN [dbo].[Statistic] AS S ON SD.[Statistic_ID] = S.[ID]
+                        WHERE S.[Order] = '{req_order_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
+                        GROUP BY S.[Order],SD.[Nominal],SD.[Tare] )
+                        SELECT CTE.[Total vægt],CTE.[Antal enheder]
+                        ,CASE WHEN CTE.[Antal enheder] = 0 
+                        THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END AS [Middelvægt]
+                        ,CASE WHEN CTE.[Antal enheder] = 0 
+                        THEN NULL ELSE CTE.[Std afv] / CTE.[Antal enheder] END AS [Standardafvigelse]
+                        ,CASE WHEN CTE.[Antal enheder] = 0 
+                        THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END - CTE.[Nominal] AS [Gns. godvægt per enhed]
+                        ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal enheder] AS [Godvægt total]
+                        ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
+                        FROM CTE """
+df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
+
+# =============================================================================
+# Define functions for later use
+# =============================================================================
 
 # Get visibility for section from query
 def get_section_visibility(dataframe, section):
@@ -246,6 +244,29 @@ else: # Write into log if no data is found or section is out of scope
 
 
 # =============================================================================
+# Section 11: Ordrestatistik fra e-vejning
+# =============================================================================
+section_id = 11
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Total vægt', 'Antal enheder', 'Middelvægt', 'Standardafvigelse',
+                'Gns. godvægt per enhed', 'Godvægt total', 'Nominel vægt', 'Taravægt']
+
+if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_com_statistics = df_com_statistics[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_com_statistics, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
 # Section 12: Karakterer
 # =============================================================================
 section_id = 12
@@ -275,10 +296,10 @@ timestamp = datetime.now()
 column_order = ['Id', 'Registreringstidspunkt', 'Operatør', 'Silo', 'Prøvetype',
                 'Bemærkning', 'Smagning status', 'Antal prøver']
 df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
-df_temp = df_temp[column_order]
 
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name)
         # *** TO DO: Insert into Word
@@ -288,9 +309,6 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
-
-
-
 
 
 # =============================================================================
@@ -303,10 +321,10 @@ column_order = ['Id','Registreringstidspunkt', 'Operatør', 'Bemærkning',
                 'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
                 'Tintie', 'Vægt', 'Ilt']
 df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
-df_temp = df_temp[column_order]
 
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name)
         # *** TO DO: Insert into Word
@@ -316,7 +334,6 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
-
 
 
 # =============================================================================

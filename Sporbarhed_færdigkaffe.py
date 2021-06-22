@@ -34,10 +34,13 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 # Read data from request
 # =============================================================================
-query_ds_request =  """SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Produkttype]
-                    ,[Rapporttype] ,[Rapport_modtager] ,[Rapport_pdf], [Ordrenummer]
-                    ,[Rapport_excel] ,[Note_forespørgsel] FROM [trc].[Sporbarhed_forespørgsel]
-                    WHERE [Forespørgsel_igangsat] IS NULL"""
+query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Produkttype]
+                    ,[Rapporttype] ,[Rapport_modtager] ,[Rapport_pdf]
+                    , [Referencenummer] AS [Ordrenummer]
+                    ,[Rapport_excel] ,[Note_forespørgsel] 
+                    FROM [trc].[Sporbarhed_forespørgsel]
+                    WHERE [Forespørgsel_igangsat] IS NULL
+                    AND [Referencetype] = 0 AND [Forespørgselstype] = 0 """
 df_request = pd.read_sql(query_ds_request, con_04)
 
 # Exit script if no request data is found
@@ -92,7 +95,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     ,[SK] AS ( SELECT [Referencenummer] ,MAX([Status]) AS [Status]
                     FROM [cof].[Smageskema] WHERE [Referencetype] = 2
                     GROUP BY [Referencenummer] )
-                    SELECT SF.[Ordrenummer] ,SF.[Pakketidspunkt] ,KH.[Igangsat_af] AS [Igangsat af]
+                    SELECT SF.[Referencenummer] AS [Ordrenummer] ,SF.[Pakketidspunkt] ,KH.[Igangsat_af] AS [Igangsat af]
                     ,KH.[Silo_opstart] AS [Opstartssilo] ,KH.[Taravægt] ,KH.[Nitrogen]
                     ,KH.[Bemærkning] AS [Bemærkning opstart] ,ISNULL(KP.[Kontrolprøve] ,0) AS [Kontrolprøver]
                     ,ISNULL(KP.[Referenceprøve] ,0) AS [Referenceprøver]
@@ -100,9 +103,9 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0 THEN 'Afvist'
                     ELSE 'Ej smagt' END AS [Smagning status]
                     FROM [trc].[Sporbarhed_forespørgsel] AS SF
-                    LEFT JOIN [cof].[Kontrolskema_hoved] AS KH ON SF.[Ordrenummer] = KH.[Ordrenummer]
-                    LEFT JOIN [KP] ON SF.[Ordrenummer] = KP.[Ordrenummer]
-                    LEFT JOIN [SK] ON SF.[Ordrenummer] = SK.[Referencenummer]
+                    LEFT JOIN [cof].[Kontrolskema_hoved] AS KH ON SF.[Referencenummer] = KH.[Ordrenummer]
+                    LEFT JOIN [KP] ON SF.[Referencenummer] = KP.[Ordrenummer]
+                    LEFT JOIN [SK] ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
 
 query_ds_samples = f""" SELECT KP.[Ordrenummer],KP.[Registreringstidspunkt]
@@ -198,7 +201,9 @@ def insert_dataframe_into_excel (dataframe, sheetname):
 # Section 0: Generelt
 # =============================================================================
 section_id = 0
+section_name = get_section_name(section_id)
 timestamp = datetime.now()
+
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_results_generelt['Varenummer'] = '12345678'
@@ -213,13 +218,13 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework tilgang'] = '2'
         df_results_generelt['Rework afgang'] = '1'
         df_results_generelt['Prod.ordre status'] = 'Færdig'
-        # Skriv i Word dokument og Excel
-        insert_dataframe_into_excel (df_results_generelt.transpose(), get_section_name(section_id))
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_results_generelt.transpose(), section_name)
+        # Write status into log
         section_log_insert(timestamp, section_id, 0)
-    except: # Statuskode hvis fejl opstår
-        # Hvis fejl
+    except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
-else: # Statuskode hvis ingen data eller sektion fravalgt og ingen fejl er opstået
+else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
     
 

@@ -225,23 +225,26 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
-nav_related_orders = string_to_sql(['041367','041344','041234'])
+related_orders = string_to_sql(['041367','041344','041234'])
 
 query_probat_ulg = f""" SELECT MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                         ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
                         ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
                         ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
                         FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                        WHERE [ORDER_NAME] IN ({nav_related_orders})
+                        WHERE [ORDER_NAME] IN ({related_orders})
                         GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME]
                     	,[D_CUSTOMER_CODE] """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
-print(df_probat_ulg)
 
-query_probat_lg = f""" SELECT [ORDER_NAME] ,[S_ORDER_NAME]
+
+query_probat_lg = f""" SELECT [S_ORDER_NAME]
                        FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
-                       WHERE [ORDER_NAME] IN ({nav_related_orders})
-                       GROUP BY	[ORDER_NAME] ,[S_ORDER_NAME] """
+                       WHERE [ORDER_NAME] IN ({related_orders})
+                       GROUP BY	[S_ORDER_NAME] """
+if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
+    df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
+    related_orders = related_orders + ',' + string_to_sql(df_probat_lg['S_ORDER_NAME'].unique().tolist())
 
 
 
@@ -285,6 +288,31 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 4: Mølleordrer
+# =============================================================================
+section_id = 4
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
+                'Probat id', 'Ordrenummer', 'Kilo']
+
+if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_probat_ulg['Receptnavn'] = 'Receptnavn'
+        df_probat_ulg = df_probat_ulg[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_probat_ulg, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)))
+
 
 
 # =============================================================================

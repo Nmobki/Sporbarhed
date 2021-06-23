@@ -151,9 +151,12 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0 THEN 'Afvist'
                     ELSE 'Ej smagt' END AS [Smagning status], KH.[Pakkelinje]
                     FROM [trc].[Sporbarhed_forespørgsel] AS SF
-                    LEFT JOIN [cof].[Kontrolskema_hoved] AS KH ON SF.[Referencenummer] = KH.[Ordrenummer]
-                    LEFT JOIN [KP] ON SF.[Referencenummer] = KP.[Ordrenummer]
-                    LEFT JOIN [SK] ON SF.[Referencenummer] = SK.[Referencenummer]
+                    LEFT JOIN [cof].[Kontrolskema_hoved] AS KH 
+                        ON SF.[Referencenummer] = KH.[Ordrenummer]
+                    LEFT JOIN [KP] 
+                        ON SF.[Referencenummer] = KP.[Ordrenummer]
+                    LEFT JOIN [SK] 
+                        ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
 df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
 
@@ -177,8 +180,8 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
 				   ,KP.[Antal_prøver] AS [Antal prøver]
                    FROM [cof].[Kontrolskema_prøver] AS KP
-                   INNER JOIN [cof].[Prøvetype] AS P
-                        ON KP.[Prøvetype] = P.[Id]
+                   INNER JOIN [cof].[Prøvetype] AS P 
+                       ON KP.[Prøvetype] = P.[Id]
                    LEFT JOIN [cof].[Smageskema] AS SK
                        ON KP.[Id] = SK.[Id_org]
                        AND SK.[Id_org_kildenummer] = 6
@@ -205,36 +208,36 @@ query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        WHERE SL.[Forespørgsels_id] = {req_id} """
 
 query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
-                            ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
-                            ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
-                        	,SUM( SD.[CounterGoodTrade] ) AS [Antal enheder]
-                        FROM [ComScaleDB].[dbo].[StatisticData] AS SD
-                        INNER JOIN [dbo].[Statistic] AS S ON SD.[Statistic_ID] = S.[ID]
-                        WHERE S.[Order] = '{req_order_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
-                        GROUP BY S.[Order],SD.[Nominal],SD.[Tare] )
-                        SELECT CTE.[Total vægt],CTE.[Antal enheder]
-                        ,CASE WHEN CTE.[Antal enheder] = 0 
-                        THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END AS [Middelvægt]
-                        ,CASE WHEN CTE.[Antal enheder] = 0 
-                        THEN NULL ELSE CTE.[Std afv] / CTE.[Antal enheder] END AS [Standardafvigelse]
-                        ,CASE WHEN CTE.[Antal enheder] = 0 
-                        THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END - CTE.[Nominal] AS [Gns. godvægt per enhed]
-                        ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal enheder] AS [Godvægt total]
-                        ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
-                        FROM CTE """
+                       ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
+                       ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
+                       ,SUM( SD.[CounterGoodTrade] ) AS [Antal enheder]
+                       FROM [ComScaleDB].[dbo].[StatisticData] AS SD
+                       INNER JOIN [dbo].[Statistic] AS S ON SD.[Statistic_ID] = S.[ID]
+                       WHERE S.[Order] = '{req_order_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
+                       GROUP BY S.[Order],SD.[Nominal],SD.[Tare] )
+                       SELECT CTE.[Total vægt],CTE.[Antal enheder]
+                       ,CASE WHEN CTE.[Antal enheder] = 0 
+                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END AS [Middelvægt]
+                       ,CASE WHEN CTE.[Antal enheder] = 0 
+                       THEN NULL ELSE CTE.[Std afv] / CTE.[Antal enheder] END AS [Standardafvigelse]
+                       ,CASE WHEN CTE.[Antal enheder] = 0 
+                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END - CTE.[Nominal] AS [Gns. godvægt per enhed]
+                       ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal enheder] AS [Godvægt total]
+                       ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
+                       FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 related_orders = string_to_sql(['041367','041344','041234'])
 
 query_probat_ulg = f""" SELECT MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
-                        ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
-                        ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
-                        ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
-                        FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                        WHERE [ORDER_NAME] IN ({related_orders})
-                        GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME]
-                    	,[D_CUSTOMER_CODE] """
+                   ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
+                   ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
+                   ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                   FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                   WHERE [ORDER_NAME] IN ({related_orders})
+                   GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME]
+                   ,[D_CUSTOMER_CODE] """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
 
@@ -247,7 +250,7 @@ if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
     related_orders = related_orders + ',' + string_to_sql(df_probat_lg['S_ORDER_NAME'].unique().tolist())
 
 
-query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Recept]
+query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                         ,MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                         ,[SOURCE_NAME] AS [Rister] ,[PRODUCTION_ORDER_ID] AS [Probat id]
                     	,[ORDER_NAME] AS [Ordrenummer] ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
@@ -256,6 +259,23 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Recept]
                         GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
                         ,[ORDER_NAME] """
 df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
+
+
+query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
+                ,[S_CONTRACT_NO] AS [Kontraktnummer]
+	,[S_DELIVERY_NAME] AS [Modtagelse]
+	,[ORDER_NAME] AS [Ordrenummer]
+	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+WHERE [ORDER_NAME] IN ({related_orders})
+GROUP BY
+	[S_TYPE_CELL]
+	,[Source]
+	,[S_CONTRACT_NO]
+	,[S_DELIVERY_NAME]
+	,[ORDER_NAME] """
+df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
+print(df_probat_lr)
 
 
 # =============================================================================

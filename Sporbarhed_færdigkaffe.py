@@ -247,9 +247,17 @@ if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
     related_orders = related_orders + ',' + string_to_sql(df_probat_lg['S_ORDER_NAME'].unique().tolist())
 
 
+query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Recept]
+                        ,MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
+                        ,[SOURCE_NAME] AS [Rister] ,[PRODUCTION_ORDER_ID] AS [Probat id]
+                    	,[ORDER_NAME] AS [Ordrenummer] ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                        FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
+                        WHERE [ORDER_NAME] IN ({related_orders})
+                        GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
+                        ,[ORDER_NAME] """
+df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
-
-
+print(df_probat_ulr)
 
 # =============================================================================
 # Section 1: Generelt

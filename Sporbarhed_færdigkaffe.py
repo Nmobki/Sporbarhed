@@ -11,6 +11,48 @@ import openpyxl
 
 
 # =============================================================================
+# Define functions
+# =============================================================================
+
+# Get visibility for section from query
+def get_section_visibility(dataframe, section):
+    return dataframe['Sektion_synlig'].iloc[section]
+
+# Get section name for section from query
+def get_section_name(section):
+    x = df_sections['Sektion navn'].iloc[section-1]
+    if len(x) == 0 or len(x) > 31:
+        return 'Sektion ' + str(section)
+    else:
+        return x
+
+# Find statuscode for section log
+def get_section_status_code(dataframe, visibility):
+    if visibility == 0:
+        return 3 # Not active for selected reporting type
+    if len(dataframe) == 0:
+        return 1 # Empty dataframe
+    else:
+        return 99 # Continue
+
+# Write into section log
+def section_log_insert(start_time, section, statuscode):
+    df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode, 'Start_tid':start_time}, index=[0])
+    df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
+
+# Write dataframe into Excel sheet
+def insert_dataframe_into_excel (dataframe, sheetname):
+    dataframe.to_excel(excel_writer, sheet_name=sheetname)
+
+# Convert list into string for SQL IN operator
+def string_to_sql(list_with_values):
+    if len(list_with_values) == 0:
+        return ''
+    else:
+        return "'{}'".format("','".join(list_with_values))
+
+
+# =============================================================================
 # Variables for query connections
 # =============================================================================
 server_04 = 'sqlsrv04'
@@ -179,40 +221,6 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                         ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
                         FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
-
-# =============================================================================
-# Define functions for later use
-# =============================================================================
-
-# Get visibility for section from query
-def get_section_visibility(dataframe, section):
-    return dataframe['Sektion_synlig'].iloc[section]
-
-# Get section name for section from query
-def get_section_name(section):
-    x = df_sections['Sektion navn'].iloc[section-1]
-    if len(x) == 0 or len(x) > 31:
-        return 'Sektion ' + str(section)
-    else:
-        return x
-
-# Find statuscode for section log
-def get_section_status_code(dataframe, visibility):
-    if visibility == 0:
-        return 3 # Not active for selected reporting type
-    if len(dataframe) == 0:
-        return 1 # Empty dataframe
-    else:
-        return 99 # Continue
-
-# Write into section log
-def section_log_insert(start_time, section, statuscode):
-    df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode, 'Start_tid':start_time}, index=[0])
-    df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
-
-# Write dataframe into Excel sheet
-def insert_dataframe_into_excel (dataframe, sheetname):
-    dataframe.to_excel(excel_writer, sheet_name=sheetname)
 
 
 # =============================================================================

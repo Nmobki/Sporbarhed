@@ -257,7 +257,6 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Recept]
                         ,[ORDER_NAME] """
 df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
-print(df_probat_ulr)
 
 # =============================================================================
 # Section 1: Generelt
@@ -320,6 +319,30 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 5: Risteordrer
+# =============================================================================
+section_id = 5
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
+                'Probat id', 'Ordrenummer', 'Kilo']
+
+if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_probat_ulr['Receptnavn'] = 'Receptnavn'
+        df_probat_ulr = df_probat_ulr[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_probat_ulr, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)))
 
 
 

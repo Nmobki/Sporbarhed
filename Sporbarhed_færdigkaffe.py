@@ -227,19 +227,21 @@ df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 nav_related_orders = string_to_sql(['041367','041344','041234'])
 
-query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+query_probat_ulg = f""" SELECT MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                         ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
                         ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
                         ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
                         FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                         WHERE [ORDER_NAME] IN ({nav_related_orders})
-                        GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                        ,[PRODUCTION_ORDER_ID],[ORDER_NAME]
+                        GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME]
                     	,[D_CUSTOMER_CODE] """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 print(df_probat_ulg)
 
-query_probat_lg = f""" """
+query_probat_lg = f""" SELECT [ORDER_NAME] ,[S_ORDER_NAME]
+                       FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                       WHERE [ORDER_NAME] IN ({nav_related_orders})
+                       GROUP BY	[ORDER_NAME] ,[S_ORDER_NAME] """
 
 
 

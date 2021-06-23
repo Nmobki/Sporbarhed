@@ -110,9 +110,11 @@ req_id = df_request.loc[0, 'Id']
 # =============================================================================
 script_name = 'Sporbarhed_færdigkaffe.py'
 filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests' # Ændre ifbm. drift
+
 doc = docx.Document()
 doc_name = f'Sporbarhedstest_{req_order_no}_{req_id}.docx'
 path_file_doc = filepath + r'\\' + doc_name
+
 wb = openpyxl.Workbook()
 wb_name = f'Sporbarhedstest_{req_order_no}_{req_id}.xlsx'
 path_file_wb = filepath + r'\\' + wb_name
@@ -221,6 +223,27 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                         ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
                         FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
+
+# OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
+nav_related_orders = string_to_sql(['041367','041344','041234'])
+
+query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                        ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
+                        ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
+                        ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                        FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                        WHERE [ORDER_NAME] IN ({nav_related_orders})
+                        GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                        ,[PRODUCTION_ORDER_ID],[ORDER_NAME]
+                    	,[D_CUSTOMER_CODE] """
+df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
+print(df_probat_ulg)
+
+query_probat_lg = f""" """
+
+
+
+
 
 
 # =============================================================================

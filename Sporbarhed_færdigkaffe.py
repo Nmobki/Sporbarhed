@@ -51,6 +51,12 @@ def string_to_sql(list_with_values):
     else:
         return "'{}'".format("','".join(list_with_values))
 
+# Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
+def log_insert(event, note):
+    dict_log = {'Note': note
+                ,'Event': event}
+    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dev', if_exists='append', index=False)
+
 
 # =============================================================================
 # Variables for query connections
@@ -105,18 +111,26 @@ req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
 
+script_name = 'Sporbarhed_færdigkaffe.py'
+
+# =============================================================================
+# Update request that it is initiated and write into log
+# =============================================================================
+log_insert(script_name, f'Request id: {req_id} initiated')
+
+
 # =============================================================================
 # Variables for files generated
 # =============================================================================
-script_name = 'Sporbarhed_færdigkaffe.py'
 filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests' # Ændre ifbm. drift
+file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
 
 doc = docx.Document()
-doc_name = f'Sporbarhedstest_{req_order_no}_{req_id}.docx'
+doc_name = f'{file_name}.docx'
 path_file_doc = filepath + r'\\' + doc_name
 
 wb = openpyxl.Workbook()
-wb_name = f'Sporbarhedstest_{req_order_no}_{req_id}.xlsx'
+wb_name = f'{file_name}.xlsx'
 path_file_wb = filepath + r'\\' + wb_name
 excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
 
@@ -546,3 +560,14 @@ else: # Write into log if no data is found or section is out of scope
 excel_writer.save()
 # *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
+
+dict_email_log = {'Filsti': filepath
+                  ,'Filnavn': file_name
+                  ,'Modtager': req_recipients
+                  ,'Emne': f'Anmodet sporbarhedstest for {req_order_no}'
+                  ,'Forespørgsels_id': req_id
+                 }
+print( pd.DataFrame(data=dict_email_log, index=[0]) )
+pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+# df_email_log.to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+

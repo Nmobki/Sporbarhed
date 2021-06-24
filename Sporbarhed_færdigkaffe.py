@@ -63,7 +63,7 @@ def log_insert(event, note):
 # =============================================================================
 server_04 = 'sqlsrv04'
 db_04 = 'BKI_Datastore'
-con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_04};DATABASE={db_04}')
+con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_04};DATABASE={db_04};autocommit=True')
 params_04 = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_04};DATABASE={db_04};Trusted_Connection=yes')
 engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={params_04}')
 cursor_04 = con_04.cursor()
@@ -116,6 +116,10 @@ script_name = 'Sporbarhed_færdigkaffe.py'
 # =============================================================================
 # Update request that it is initiated and write into log
 # =============================================================================
+cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+                  SET [Forespørgsel_igangsat] = getdate()
+                  WHERE [Id] = {req_id}""")
+cursor_04.commit()
 log_insert(script_name, f'Request id: {req_id} initiated')
 
 
@@ -546,10 +550,6 @@ else: # Write into log if no data is found or section is out of scope
 
 
 # =============================================================================
-#
-# Indsæt i Excel
-# insert_dataframe_into_excel(df_results_generelt, 'Generelt')
-#
 # Nogenlunde indsæt i Word
 # doc.add_paragraph('Test tekst!!!')
 # doc.save(path_file_doc)
@@ -558,6 +558,7 @@ else: # Write into log if no data is found or section is out of scope
 
 #Save files
 excel_writer.save()
+log_insert(script_name, 'Excel file created')
 # *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
 

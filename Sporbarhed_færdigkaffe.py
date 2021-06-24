@@ -546,22 +546,3 @@ else: # Write into log if no data is found or section is out of scope
 excel_writer.save()
 # *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
-
-
-# =============================================================================
-# # Dette må være flowet for dannelse af dataframes..
-# if get_section_status_code(dataframe, get_section_visibility(dataframe, section)) == 99:
-#     try:
-#         # Forbered dataframe
-#         # Skriv i Word dokument og Excel
-#         # Skriv i Excel: insert_dataframe_into_excel (dataframe, sheetname)
-#         section_log_insert(timestamp, section_code, 0)
-#     except:
-#         # Hvis fejl
-#         section_log_insert(timestamp, section_code, 2)
-# else:
-#     # Skriv statuskode
-#     section_log_insert(timestamp, section_code, get_section_status_code(Dataframe, get_section_visibility(df_sections, section_code)))
-#
-# =============================================================================
-

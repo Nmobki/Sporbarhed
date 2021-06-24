@@ -263,19 +263,14 @@ df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
 query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                 ,[S_CONTRACT_NO] AS [Kontraktnummer]
-	,[S_DELIVERY_NAME] AS [Modtagelse]
-	,[ORDER_NAME] AS [Ordrenummer]
-	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
-FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-WHERE [ORDER_NAME] IN ({related_orders})
-GROUP BY
-	[S_TYPE_CELL]
-	,[Source]
-	,[S_CONTRACT_NO]
-	,[S_DELIVERY_NAME]
-	,[ORDER_NAME] """
+                ,[S_DELIVERY_NAME] AS [Modtagelse],[ORDER_NAME] AS [Ordrenummer]
+            	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                WHERE [ORDER_NAME] IN ({related_orders})
+                GROUP BY [S_TYPE_CELL],[Source],[S_CONTRACT_NO]
+                	,[S_DELIVERY_NAME],[ORDER_NAME] """
 df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
-print(df_probat_lr)
+
 
 
 # =============================================================================
@@ -365,6 +360,29 @@ else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)))
 
 
+# =============================================================================
+# Section 6: Råkaffeforbrug
+# =============================================================================
+section_id = 6
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
+                'Ordrenummer','Kilo']
+
+if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_probat_lr['Sortnavn'] = 'Sortnavn'
+        df_probat_lr = df_probat_lr[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_probat_lr, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)))
+
 
 # =============================================================================
 # Section 8: Massebalance
@@ -372,8 +390,8 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 8
 section_name = get_section_name(section_id)
 timestamp = datetime.now()
-dict_massebalance = {'[1] Råkaffe': 100,
-                     '[2] Ristet kaffe': 90,
+dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
+                     '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                      '[3] Difference': 0,
                      '[4] Færdigvaretilgang': 88,
                      '[5] Difference': 0,

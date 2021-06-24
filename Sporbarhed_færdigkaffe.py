@@ -68,11 +68,11 @@ params_04 = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVE
 engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={params_04}')
 cursor_04 = con_04.cursor()
 
-server_nav = 'sqlsrv03\navision'
+server_nav = r'SQLSRV03\NAVISION'
 db_nav = 'NAV100-DRIFT'
-# con_nav = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-# params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-# engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
+con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
+params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
+engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
 
 server_comscale = r'comscale-bki\sqlexpress'
 db_comscale = 'ComScaleDB'
@@ -569,6 +569,7 @@ dict_email_log = {'Filsti': filepath
                   ,'Filnavn': file_name
                   ,'Modtager': req_recipients
                   ,'Emne': f'Anmodet sporbarhedstest for {req_order_no}'
-                  ,'Forespørgsels_id': req_id }
+                  ,'Forespørgsels_id': req_id
+                  ,'Note':req_note}
 pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
 log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')

@@ -561,13 +561,13 @@ excel_writer.save()
 # *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
 
+# =============================================================================
+# Write into email log
+# =============================================================================
 dict_email_log = {'Filsti': filepath
                   ,'Filnavn': file_name
                   ,'Modtager': req_recipients
                   ,'Emne': f'Anmodet sporbarhedstest for {req_order_no}'
-                  ,'Forespørgsels_id': req_id
-                 }
-print( pd.DataFrame(data=dict_email_log, index=[0]) )
+                  ,'Forespørgsels_id': req_id }
 pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
-# df_email_log.to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
-
+log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')

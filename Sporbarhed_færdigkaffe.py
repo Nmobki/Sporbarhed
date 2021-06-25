@@ -245,6 +245,44 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
+query_nav_generelt = f""" WITH [RECEPT] AS ( 
+                     SELECT	POC.[Prod_ Order No_],I.[No_]
+                     FROM [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
+                     INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                    	ON POC.[Item No_] = I.[No_]
+                     WHERE [POC].[Prod_ Order Line No_] = 10000
+                    	AND I.[Sequence Code] = 4)
+                     ,[ILE] AS ( SELECT [Order No_]
+                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'REWORK' THEN [Quantity] ELSE 0 END) AS [Rework forbrug]
+                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'REWORK' THEN [Quantity] ELSE 0 END) AS [Rework afgang]
+                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'SLAT' THEN [Quantity] ELSE 0 END) AS [Slat forbrug]
+                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'SLAT' THEN [Quantity] ELSE 0 END) AS [Slat afgang]
+                     FROM [dbo].[BKI foods a_s$Item Ledger Entry]
+                     WHERE [Order Type] = 1 GROUP BY [Order No_] )
+                     SELECT PO.[Source No_] AS [Varenummer]
+                     ,I.[Description] AS [Varenummer]
+                     ,I.[Base Unit of Measure] AS [Basisenhed]
+                     ,CASE WHEN PO.[Status] = 0 THEN 'Simuleret'
+                     WHEN PO.[Status] = 1 THEN 'Planlagt'
+                     WHEN PO.[Status] = 2 THEN 'Fastlagt'
+                     WHEN PO.[Status] = 3 THEN 'Frigivet'
+                     WHEN PO.[Status] = 4 THEN 'Færdig'
+                     END AS [Prod.ordre status]
+                     ,ICR.[Cross-Reference No_] AS [Stregkode]
+                     ,RECEPT.[No_] AS [Receptnummer],ILE.[Rework afgang]
+                     ,ILE.[Rework forbrug],ILE.[Slat afgang],ILE.[Slat forbrug]
+                     FROM [dbo].[BKI foods a_s$Production Order] AS PO
+                     INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                    	ON PO.[Source No_] = I.[No_]
+                     LEFT JOIN [dbo].[BKI foods a_s$Item Cross Reference] AS ICR
+                    	ON I.[No_] = ICR.[Item No_] AND ICR.[Unit of Measure] = 'PS'
+                    	AND ICR.[Cross-Reference Type] = 3
+                     LEFT JOIN [RECEPT] ON PO.[No_] = RECEPT.[Prod_ Order No_]
+                     LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
+                     WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = {req_order_no} """
+df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
+print(df_nav_generelt)
+
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 related_orders = string_to_sql(['041367','041344','041234'])
 

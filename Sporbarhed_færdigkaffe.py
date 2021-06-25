@@ -348,18 +348,18 @@ column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkeli
 
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0,0]
-        df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0,0]
-        df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0,0]
-        df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0,0]
+        df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
+        df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
+        df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
+        df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
         df_results_generelt['Produktionsdato'] = '2021-02-03,2021-02-04'
-        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0,0]
+        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
         df_results_generelt['Lotnumre produceret'] = 723
-        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0,0]
-        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0,0]
-        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0,0]
-        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0,0]
-        df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0,0]
+        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
+        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
+        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
+        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
+        df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
         df_results_generelt = df_results_generelt[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt.transpose(), section_name)
@@ -371,7 +371,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
 
-print(df_results_generelt)
+
 # =============================================================================
 # Section 4: Mølleordrer
 # =============================================================================

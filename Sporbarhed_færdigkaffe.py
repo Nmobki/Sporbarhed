@@ -581,7 +581,6 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
 
-print(df_nav_lotno)
 
 # =============================================================================
 # Section 16: Reference- og henstandsprøver

@@ -253,10 +253,14 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      WHERE [POC].[Prod_ Order Line No_] = 10000
                     	AND I.[Sequence Code] = 4)
                      ,[ILE] AS ( SELECT [Order No_]
-                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'REWORK' THEN [Quantity] ELSE 0 END) AS [Rework forbrug]
-                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'REWORK' THEN [Quantity] ELSE 0 END) AS [Rework afgang]
-                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'SLAT' THEN [Quantity] ELSE 0 END) AS [Slat forbrug]
-                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'SLAT' THEN [Quantity] ELSE 0 END) AS [Slat afgang]
+                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'REWORK' 
+                          THEN [Quantity] ELSE 0 END) AS [Rework forbrug]
+                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'REWORK' 
+                          THEN [Quantity] ELSE 0 END) AS [Rework afgang]
+                     ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'SLAT' 
+                          THEN [Quantity] ELSE 0 END) AS [Slat forbrug]
+                     ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'SLAT' 
+                          THEN [Quantity] ELSE 0 END) AS [Slat afgang]
                      FROM [dbo].[BKI foods a_s$Item Ledger Entry]
                      WHERE [Order Type] = 1 GROUP BY [Order No_] )
                      SELECT PO.[Source No_] AS [Varenummer]
@@ -281,7 +285,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                      WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = {req_order_no} """
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
-print(df_nav_generelt)
+
 
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 related_orders = string_to_sql(['041367','041344','041234'])
@@ -339,23 +343,23 @@ column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkeli
                 'Produktionsdato', 'Pakketidspunkt', 'Stregkode', 'Ordrenummer',
                 'Smagning status', 'Opstartssilo', 'Igangsat af', 'Taravægt',
                 'Nitrogen', 'Henstandsprøver', 'Referenceprøver', 'Kontrolprøver',
-                'Bemærkning opstart', 'Lotnumre produceret', 'Slat tilgang',
-                'Slat afgang', 'Rework tilgang', 'Rework afgang' ,'Prod.ordre status']
+                'Bemærkning opstart', 'Lotnumre produceret', 'Slat forbrug',
+                'Slat afgang', 'Rework forbrug', 'Rework afgang' ,'Prod.ordre status']
 
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_results_generelt['Varenummer'] = '12345678'
-        df_results_generelt['Varenavn'] = 'varenavn'
-        df_results_generelt['Basisenhed'] = 'KRT'
-        df_results_generelt['Receptnummer'] = '10401234'
+        df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0,0]
+        df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0,0]
+        df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0,0]
+        df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0,0]
         df_results_generelt['Produktionsdato'] = '2021-02-03,2021-02-04'
-        df_results_generelt['Stregkode'] = '00000413547'
-        df_results_generelt['Lotnumre produceret'] = '17'
-        df_results_generelt['Slat tilgang'] = '5'
-        df_results_generelt['Slat afgang'] = '5'
-        df_results_generelt['Rework tilgang'] = '2'
-        df_results_generelt['Rework afgang'] = '1'
-        df_results_generelt['Prod.ordre status'] = 'Færdig'
+        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0,0]
+        df_results_generelt['Lotnumre produceret'] = 723
+        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0,0]
+        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0,0]
+        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0,0]
+        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0,0]
+        df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0,0]
         df_results_generelt = df_results_generelt[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt.transpose(), section_name)
@@ -367,7 +371,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
 
-
+print(df_results_generelt)
 # =============================================================================
 # Section 4: Mølleordrer
 # =============================================================================

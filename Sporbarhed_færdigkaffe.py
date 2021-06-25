@@ -264,7 +264,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      FROM [dbo].[BKI foods a_s$Item Ledger Entry]
                      WHERE [Order Type] = 1 GROUP BY [Order No_] )
                      SELECT PO.[Source No_] AS [Varenummer]
-                     ,I.[Description] AS [Varenummer]
+                     ,I.[Description] AS [Varenavn]
                      ,I.[Base Unit of Measure] AS [Basisenhed]
                      ,CASE WHEN PO.[Status] = 0 THEN 'Simuleret'
                      WHEN PO.[Status] = 1 THEN 'Planlagt'

@@ -214,6 +214,15 @@ query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre]
                           AND [Referencenummer] = '{req_order_no}' """
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
+query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
+                   ,[Initialer] AS [Kontrolleret af],[Lotnummer]
+                   ,[Pallenummer],[Antal_poser] AS [Antal leakers]
+                   ,[Bemærkning] AS [Kontrol bemærkning]
+				   ,CASE WHEN [Overført_email_log] = 1 THEN
+				   'Over grænseværdi' ELSE 'Ok' END AS [Resultat af kontrol]
+                   FROM [cof].[Vac_slip] """
+df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
+
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
                        ,SL.[Start_tid],SL.[Registreringstidspunkt] AS [Slut tid]
@@ -285,6 +294,26 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                      WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = {req_order_no} """
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
+
+
+query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
+            	  ,LI.[Certificate Number] AS [Pallenummer]
+              	  ,[Quantity] * I.[Net Weight] AS [Kilo]
+            	  ,CAST(ROUND(ILE.[Quantity] / IUM.[Qty_ per Unit of Measure],0) AS INT) AS [Antal poser]
+            	  ,DATEADD(hour, 1, ILE.[Produktionsdato_-tid]) AS [Produktionstidspunkt]
+                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] ILE
+                  INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                      ON ILE.[Item No_] = I.[No_]
+                  LEFT JOIN [dbo].[BKI foods a_s$Lot No_ Information] AS LI
+                	  ON ILE.[Lot No_] = LI.[Lot No_]
+                      AND ILE.[Item No_] = LI.[Item No_]
+                  LEFT JOIN [dbo].[BKI foods a_s$Item Unit of Measure] AS IUM
+                	  ON ILE.[Item No_] = IUM.[Item No_]
+                      AND IUM.[Code] = 'PS'
+                  WHERE ILE.[Order Type] = 1
+                	  AND ILE.[Entry Type] = 6
+                      AND ILE.[Order No_] = '{req_order_no}' """
+df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
 
 
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
@@ -520,6 +549,39 @@ else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
 
 
+# =============================================================================
+# Section 15: Lotnumre
+# =============================================================================
+section_id = 15
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Lotnummer', 'Pallenummer', 'Produktionstidspunkt', 'Kontrolleret af',
+                'Kontrol bemærkning', 'Kontroltidspunkt', 'Kilo', 'Antal poser',
+                'Antal leakers', 'Leakers pct', 'Resultat af kontrol']
+
+if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
+                                right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
+        df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
+        # df_nav_lotno['Kontrolleret af'] = 'a'
+        # df_nav_lotno['Kontrol bemærkning'] =  'blablabla'
+        # df_nav_lotno['Kontroltidspunkt'] =  '2021-06-21 10:28:31'
+        # df_nav_lotno['Antal leakers'] =  17
+        df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
+        # df_nav_lotno['Resultat af kontrol'] = 'puha dårlig pose'
+        df_nav_lotno = df_nav_lotno[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_nav_lotno, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
+
+print(df_nav_lotno)
 
 # =============================================================================
 # Section 16: Reference- og henstandsprøver

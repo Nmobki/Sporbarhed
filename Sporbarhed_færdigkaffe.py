@@ -552,17 +552,24 @@ timestamp = datetime.now()
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                      '[3] Difference': None,
-                     '[4] Færdigvaretilgang': df_nav_færdigvaretilgang['Produceret'].sum(),
-                     '[5] Difference': None,
-                     '[6] Salg': df_nav_færdigvaretilgang['Salg'].sum(),
-                     '[7] Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum(),
-                     '[8] Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
-                     '[9] Difference': None }
+                     '[4] Difference pct': None,
+                     '[5] Færdigvaretilgang': df_nav_færdigvaretilgang['Produceret'].sum(),
+                     '[6] Difference': None,
+                     '[7] Difference pct': None,
+                     '[8] Salg': df_nav_færdigvaretilgang['Salg'].sum(),
+                     '[9] Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum(),
+                     '[10] Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
+                     '[11] Difference': None,
+                     '[12] Difference pct': None}
 dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
-dict_massebalance['[5] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[4] Færdigvaretilgang']
-dict_massebalance['[9] Difference'] = ( dict_massebalance['[4] Færdigvaretilgang']
-    - dict_massebalance['[6] Salg'] - dict_massebalance['[7] Regulering & ompak']
-    - dict_massebalance['[8] Restlager'] )
+dict_massebalance['[4] Difference pct'] = dict_massebalance['[3] Difference'] / dict_massebalance['[1] Råkaffe']
+dict_massebalance['[6] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[5] Færdigvaretilgang']
+dict_massebalance['[7] Difference pct'] = dict_massebalance['[6] Difference'] / dict_massebalance['[2] Ristet kaffe']
+dict_massebalance['[11] Difference'] = ( dict_massebalance['[5] Færdigvaretilgang']
+    - dict_massebalance['[8] Salg'] - dict_massebalance['[9] Regulering & ompak']
+    - dict_massebalance['[10] Restlager'] )
+dict_massebalance['[12] Difference pct'] = dict_massebalance['[11] Difference'] / dict_massebalance['[5] Færdigvaretilgang']
+
 df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:

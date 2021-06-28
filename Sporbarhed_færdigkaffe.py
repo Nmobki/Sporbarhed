@@ -322,17 +322,17 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                                   AND ILE_O.[Entry Type] IN (6,9) )
                               ,[LOT_SINGLE] AS ( SELECT [Lot No_]
                               FROM [LOT_ORG] GROUP BY [Lot No_] )
-                              SELECT ILE.[Item No_],I.[Description]
+                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]
                         	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight]
                         		ELSE 0 END) AS [Produceret]
                         	,SUM(CASE WHEN ILE.[Entry Type] = 1
                         		THEN ILE.[Quantity] * I.[Net Weight] * -1
                         		ELSE 0 END) AS [Salg]
-                        	,SUM(CASE WHEN ILE.[Entry Type] IN (2,3,5,8)
+                        	,SUM(CASE WHEN ILE.[Entry Type] NOT IN (0,1,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight] * -1
                         		ELSE 0 END) AS [Regulering & ompak]
-                        	,SUM(ILE.[Remaining Quantity]) AS [Restlager]
+                        	,SUM(ILE.[Remaining Quantity] * I.[Net Weight]) AS [Restlager]
                             FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
                             INNER JOIN [dbo].[BKI foods a_s$Item] AS I
                             	ON ILE.[Item No_] = I.[No_]
@@ -472,6 +472,27 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 3: Færdigvaretilgang
+# =============================================================================
+section_id = 3
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
+
+if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_nav_færdigvaretilgang[column_order], section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================

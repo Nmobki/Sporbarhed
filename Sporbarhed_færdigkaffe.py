@@ -383,7 +383,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
         df_results_generelt['Produktionsdato'] = '2021-02-03,2021-02-04'
         df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
-        df_results_generelt['Lotnumre produceret'] = 723
+        df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
         df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
         df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
         df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
@@ -564,12 +564,8 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
                                 right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
         df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
-        # df_nav_lotno['Kontrolleret af'] = 'a'
-        # df_nav_lotno['Kontrol bemærkning'] =  'blablabla'
-        # df_nav_lotno['Kontroltidspunkt'] =  '2021-06-21 10:28:31'
-        # df_nav_lotno['Antal leakers'] =  17
         df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
-        # df_nav_lotno['Resultat af kontrol'] = 'puha dårlig pose'
+        df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
         df_nav_lotno = df_nav_lotno[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_lotno, section_name)

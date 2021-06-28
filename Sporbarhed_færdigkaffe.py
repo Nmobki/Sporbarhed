@@ -301,58 +301,45 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
 
 
+req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES NÅR NAV UDVIKLING ER PÅ PLADS
+
 # Recursive query to find all relevant produced orders related to the requested order
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
 # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
 # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( 
-SELECT
-	[Lot No_]
-FROM [dbo].[BKI foods a_s$Item Ledger Entry]
-WHERE [Order No_] IN( '036720')
-	AND [Entry Type] = 6
-
-UNION ALL
-
-SELECT
-	ILE_O.[Lot No_]
-FROM [LOT_ORG]
-INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE_C
-	ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
-	AND [ILE_C].[Entry Type] IN (5,8)
-INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry]  AS ILE_O
-	ON ILE_C.[Document No_] = ILE_O.[Document No_]
-	AND ILE_O.[Entry Type] IN (6,9)
-)
-
-
-SELECT
-	ILE.[Item No_]
-	,I.[Description]
-	,SUM(CASE
-		WHEN ILE.[Entry Type] IN (0,6,9)
-			THEN ILE.[Quantity] * I.[Net Weight]
-		ELSE 0
-	END) AS [Produceret]
-	,SUM(CASE
-		WHEN ILE.[Entry Type] = 1
-			THEN ILE.[Quantity] * I.[Net Weight] * -1
-		ELSE 0
-	END) AS [Salg]
-	,SUM(CASE
-		WHEN ILE.[Entry Type] IN (2,3,5,8)
-			THEN ILE.[Quantity] * I.[Net Weight] * -1
-		ELSE 0
-	END) AS [Regulering & ompak]
-	,SUM(ILE.[Remaining Quantity]) AS [Restlager]
-FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
-INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-	ON ILE.[Item No_] = I.[No_]
-INNER JOIN [LOT_ORG]
-	ON ILE.[Lot No_] = LOT_ORG.[Lot No_]
-GROUP BY
-	ILE.[Item No_]
-	,I.[Description] """
+query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry]
+                              WHERE [Order No_] IN( {req_orders_total} )
+                              AND [Entry Type] = 6
+                              UNION ALL
+                              SELECT ILE_O.[Lot No_]
+                              FROM [LOT_ORG]
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE_C
+                                  ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
+                                  AND [ILE_C].[Entry Type] IN (5,8)
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry]  AS ILE_O
+                            	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
+                                  AND ILE_O.[Entry Type] IN (6,9) )
+                              ,[LOT_SINGLE] AS ( SELECT [Lot No_]
+                              FROM [LOT_ORG] GROUP BY [Lot No_] )
+                              SELECT ILE.[Item No_],I.[Description]
+                        	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
+                        		THEN ILE.[Quantity] * I.[Net Weight]
+                        		ELSE 0 END) AS [Produceret]
+                        	,SUM(CASE WHEN ILE.[Entry Type] = 1
+                        		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                        		ELSE 0 END) AS [Salg]
+                        	,SUM(CASE WHEN ILE.[Entry Type] IN (2,3,5,8)
+                        		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                        		ELSE 0 END) AS [Regulering & ompak]
+                        	,SUM(ILE.[Remaining Quantity]) AS [Restlager]
+                            FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
+                            INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                            	ON ILE.[Item No_] = I.[No_]
+                            INNER JOIN [LOT_SINGLE]
+                            	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
+                            GROUP BY ILE.[Item No_],I.[Description] """
+df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
 
 query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
             	  ,LI.[Certificate Number] AS [Pallenummer]
@@ -565,15 +552,15 @@ timestamp = datetime.now()
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                      '[3] Difference': 0,
-                     '[4] Færdigvaretilgang': 88,
+                     '[4] Færdigvaretilgang': df_nav_færdigvaretilgang['Produceret'].sum(),
                      '[5] Difference': 0,
-                     '[6] Salg': 83,
-                     '[7] Kassation & ompak': 2,
-                     '[8] Restlager': 3,
+                     '[6] Salg': df_nav_færdigvaretilgang['Salg'].sum(),
+                     '[7] Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum(),
+                     '[8] Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
                      '[9] Difference': 0 }
 dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
 dict_massebalance['[5] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[4] Færdigvaretilgang']
-dict_massebalance['[9] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
+dict_massebalance['[9] Difference'] = dict_massebalance['[4] Færdigvaretilgang'] - dict_massebalance['[6] Salg'] - dict_massebalance['[7] Regulering & ompak'] - dict_massebalance['[8] Restlager']
 df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:

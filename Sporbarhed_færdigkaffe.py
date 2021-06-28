@@ -223,6 +223,11 @@ query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
                    FROM [cof].[Vac_slip] """
 df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
 
+query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
+                  FROM [cof].[Ventil_registrering]
+                  WHERE [Ordrenummer] = '{req_order_no}' """
+df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
+
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
                        ,SL.[Start_tid],SL.[Registreringstidspunkt] AS [Slut tid]
@@ -314,6 +319,23 @@ query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
                 	  AND ILE.[Entry Type] = 6
                       AND ILE.[Order No_] = '{req_order_no}' """
 df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
+
+query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
+                	   ,I.[Description] AS [Varenavn]
+                       ,POAC.[Purchase Order No_] AS [Købsordre]
+                       ,POAC.[Roll No_] AS [Rullenummer]
+                       ,CAST(POAC.[Roll Lenght] AS INT) AS [Rullelængde]
+                       ,POAC.[Batch_Lot No_] AS [Lotnummer]
+                       ,POAC.[Packaging Date] AS [Pakkedato]
+                       FROM [dbo].[BKI foods a_s$Prod_ Order Add_ Comp_] AS POAC
+                       INNER JOIN [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
+                           ON POAC.[Prod_ Order No_] = POC.[Prod_ Order No_]
+                           AND POAC.[Prod_ Order Line No_] = POC.[Prod_ Order Line No_]
+                           AND POAC.[Prod_ Order Component Line No_] = POC.[Line No_]
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON POC.[Item No_] = I.[No_]
+                       WHERE POAC.[Prod_ Order No_] = '{req_order_no}' """
+df_nav_components = pd.read_sql(query_nav_components, con_nav)
 
 
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
@@ -547,6 +569,30 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 14: Anvendt primæremballage
+# =============================================================================
+section_id = 14
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
+                'Pakkedato','Købsordre']
+
+if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
+        df_nav_components = df_nav_components[column_order]
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_nav_components, section_name)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================

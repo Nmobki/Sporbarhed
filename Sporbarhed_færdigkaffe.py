@@ -551,16 +551,18 @@ section_name = get_section_name(section_id)
 timestamp = datetime.now()
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
-                     '[3] Difference': 0,
+                     '[3] Difference': None,
                      '[4] Færdigvaretilgang': df_nav_færdigvaretilgang['Produceret'].sum(),
-                     '[5] Difference': 0,
+                     '[5] Difference': None,
                      '[6] Salg': df_nav_færdigvaretilgang['Salg'].sum(),
                      '[7] Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum(),
                      '[8] Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
-                     '[9] Difference': 0 }
+                     '[9] Difference': None }
 dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
 dict_massebalance['[5] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[4] Færdigvaretilgang']
-dict_massebalance['[9] Difference'] = dict_massebalance['[4] Færdigvaretilgang'] - dict_massebalance['[6] Salg'] - dict_massebalance['[7] Regulering & ompak'] - dict_massebalance['[8] Restlager']
+dict_massebalance['[9] Difference'] = ( dict_massebalance['[4] Færdigvaretilgang']
+    - dict_massebalance['[6] Salg'] - dict_massebalance['[7] Regulering & ompak']
+    - dict_massebalance['[8] Restlager'] )
 df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:

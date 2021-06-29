@@ -56,6 +56,10 @@ def log_insert(event, note):
     dict_log = {'Note': note
                 ,'Event': event}
     pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dev', if_exists='append', index=False)
+    
+def get_nav_item_info(item_no, field):
+    df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
+    return df_temp[field].iloc[0]
 
 
 # =============================================================================
@@ -259,6 +263,10 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
+query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
+                  FROM [dbo].[BKI foods a_s$Item] """
+df_nav_items = pd.read_sql(query_nav_items, con_nav)
+
 query_nav_generelt = f""" WITH [RECEPT] AS ( 
                      SELECT	POC.[Prod_ Order No_],I.[No_]
                      FROM [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
@@ -356,21 +364,21 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                     	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
                     	  AND ILE_O.[Entry Type] IN (6,9) )
                       ,[LOT_SINGLE] AS ( SELECT [Lot No_]
-                    FROM [LOT_ORG] GROUP BY [Lot No_] )
-                    SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn]
-                    	,ILE.[Posting Date] AS [Dato]
-                    	,ILE.[Item No_] AS [Varenummer]
-                    	,SUM(ILE.[Quantity] * -1) AS [Enheder]
-                    	,SUM(ILE.[Quantity] * I.[Net Weight] * -1) AS [Kilo]
-                    FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
-                    INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                    	ON ILE.[Item No_] = I.[No_]
-                    INNER JOIN [LOT_SINGLE]
-                    	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                    INNER JOIN [dbo].[BKI foods a_s$Customer] AS C
-                    	ON ILE.[Source No_] = C.[No_]
-                    WHERE ILE.[Entry Type] = 1
-                    GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
+                      FROM [LOT_ORG] GROUP BY [Lot No_] )
+                      SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn]
+                    	  ,ILE.[Posting Date] AS [Dato]
+                    	  ,ILE.[Item No_] AS [Varenummer]
+                    	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
+                    	  ,SUM(ILE.[Quantity] * I.[Net Weight] * -1) AS [Kilo]
+                      FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
+                      INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                    	  ON ILE.[Item No_] = I.[No_]
+                      INNER JOIN [LOT_SINGLE]
+                      	  ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
+                      INNER JOIN [dbo].[BKI foods a_s$Customer] AS C
+                    	  ON ILE.[Source No_] = C.[No_]
+                      WHERE ILE.[Entry Type] = 1
+                      GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
 query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
@@ -538,7 +546,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
 
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_probat_ulg['Receptnavn'] = 'Receptnavn'
+        df_probat_ulg['Receptnavn'] = df_probat_ulg['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulg[column_order], section_name, False)
         # *** TO DO: Insert into Word
@@ -561,7 +569,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
 
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_probat_ulr['Receptnavn'] = 'Receptnavn'
+        df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulr[column_order], section_name, False)
         # *** TO DO: Insert into Word
@@ -584,7 +592,7 @@ column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
 
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_probat_lr['Sortnavn'] = 'Sortnavn'
+        df_probat_lr['Sortnavn'] = df_probat_lr['Sortnavn'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_lr[column_order], section_name, False)
         # *** TO DO: Insert into Word
@@ -734,6 +742,7 @@ column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde'
 if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
+        df_nav_components['Varenavn'] = df_nav_components['Varenavn'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components[column_order], section_name, False)
         # *** TO DO: Insert into Word

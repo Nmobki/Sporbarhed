@@ -41,8 +41,8 @@ def section_log_insert(start_time, section, statuscode):
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
-def insert_dataframe_into_excel (dataframe, sheetname):
-    dataframe.to_excel(excel_writer, sheet_name=sheetname)
+def insert_dataframe_into_excel (dataframe, sheetname, include_index):
+    dataframe.to_excel(excel_writer, sheet_name=sheetname, index=include_index)
 
 # Convert list into string for SQL IN operator
 def string_to_sql(list_with_values):
@@ -496,7 +496,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_results_generelt[column_order].transpose(), section_name)
+        insert_dataframe_into_excel (df_results_generelt[column_order].transpose(), section_name, True)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -517,7 +517,7 @@ column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Reguler
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_færdigvaretilgang[column_order], section_name)
+        insert_dataframe_into_excel (df_nav_færdigvaretilgang[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -540,7 +540,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
     try:
         df_probat_ulg['Receptnavn'] = 'Receptnavn'
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_ulg[column_order], section_name)
+        insert_dataframe_into_excel (df_probat_ulg[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -563,7 +563,7 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
     try:
         df_probat_ulr['Receptnavn'] = 'Receptnavn'
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_ulr[column_order], section_name)
+        insert_dataframe_into_excel (df_probat_ulr[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -586,7 +586,7 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
     try:
         df_probat_lr['Sortnavn'] = 'Sortnavn'
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_lr[column_order], section_name)
+        insert_dataframe_into_excel (df_probat_lr[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -594,6 +594,27 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(timestamp, section_id, get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)))
+
+
+# =============================================================================
+# Section 7: Debitorer
+# =============================================================================
+section_id = 7
+section_name = get_section_name(section_id)
+timestamp = datetime.now()
+column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
+
+if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_nav_debitorer[column_order], section_name, False)
+        # *** TO DO: Insert into Word
+        # Write status into log
+        section_log_insert(timestamp, section_id, 0)
+    except: # Insert error into log
+        section_log_insert(timestamp, section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -628,7 +649,7 @@ df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_massebalance, section_name)
+        insert_dataframe_into_excel (df_massebalance, section_name, True)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -650,7 +671,7 @@ column_order = ['Total vægt', 'Antal enheder', 'Middelvægt', 'Standardafvigels
 if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_com_statistics[column_order], section_name)
+        insert_dataframe_into_excel (df_com_statistics[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -670,7 +691,7 @@ timestamp = datetime.now()
 if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_karakterer, section_name)
+        insert_dataframe_into_excel (df_karakterer, section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -691,7 +712,7 @@ column_order = ['Varenummer','Varenavn','Basisenhed','Antal']
 if get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_consumption[column_order], section_name)
+        insert_dataframe_into_excel (df_nav_consumption[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -714,30 +735,7 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_components[column_order], section_name)
-        # *** TO DO: Insert into Word
-        # Write status into log
-        section_log_insert(timestamp, section_id, 0)
-    except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
-else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
-
-
-# =============================================================================
-# Section 14: Anvendt primæremballage
-# =============================================================================
-section_id = 14
-section_name = get_section_name(section_id)
-timestamp = datetime.now()
-column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
-                'Pakkedato','Købsordre']
-
-if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
-    try:
-        df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
-        # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_components[column_order], section_name)
+        insert_dataframe_into_excel (df_nav_components[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -765,7 +763,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
         df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_lotno[column_order], section_name)
+        insert_dataframe_into_excel (df_nav_lotno[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -788,7 +786,7 @@ df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_temp[column_order], section_name)
+        insert_dataframe_into_excel (df_temp[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -812,7 +810,7 @@ df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_temp[column_order], section_name)
+        insert_dataframe_into_excel (df_temp[column_order], section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -833,7 +831,7 @@ timestamp = datetime.now()
 if get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_section_log, section_name)
+        insert_dataframe_into_excel (df_section_log, section_name, False)
         # *** TO DO: Insert into Word
         # Write status into log
         section_log_insert(timestamp, section_id, 0)

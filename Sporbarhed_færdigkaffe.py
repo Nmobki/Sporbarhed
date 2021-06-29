@@ -296,6 +296,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      END AS [Prod.ordre status]
                      ,ICR.[Cross-Reference No_] AS [Stregkode]
                      ,RECEPT.[No_] AS [Receptnummer],ILE.[Rework afgang]
+                     ,MIN(ILE.[Posting Date]) AS 
                      ,ILE.[Rework forbrug],ILE.[Slat afgang],ILE.[Slat forbrug]
                      FROM [dbo].[BKI foods a_s$Production Order] AS PO
                      INNER JOIN [dbo].[BKI foods a_s$Item] AS I
@@ -592,7 +593,7 @@ column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
 
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_probat_lr['Sortnavn'] = df_probat_lr['Sortnavn'].apply(get_nav_item_info, field='Beskrivelse')
+        df_probat_lr['Sortnavn'] = df_probat_lr['Sortnummer'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_lr[column_order], section_name, False)
         # *** TO DO: Insert into Word
@@ -742,7 +743,7 @@ column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde'
 if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
-        df_nav_components['Varenavn'] = df_nav_components['Varenavn'].apply(get_nav_item_info, field='Beskrivelse')
+        df_nav_components['Varenavn'] = df_nav_components['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components[column_order], section_name, False)
         # *** TO DO: Insert into Word

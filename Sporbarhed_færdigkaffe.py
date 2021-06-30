@@ -877,3 +877,12 @@ dict_email_log = {'Filsti': filepath
                   ,'Note':req_note}
 pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
 log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
+
+# =============================================================================
+# Update request that dataprocessing has been completed
+# =============================================================================
+cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+                  SET Data_færdigbehandlet = 1
+                  WHERE [Id] = {req_id}""")
+cursor_04.commit()
+log_insert(script_name, f'Request id: {req_id} completed')

@@ -274,7 +274,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                     	ON POC.[Item No_] = I.[No_]
                      WHERE [POC].[Prod_ Order Line No_] = 10000
                     	AND I.[Sequence Code] = 4)
-                     ,[ILE] AS ( SELECT [Order No_]
+                     ,[ILE] AS ( SELECT [Order No_],MIN([Posting Date]) AS [Posting Date]
                      ,SUM(CASE WHEN [Entry Type] = 5 AND [Location Code] = 'REWORK' 
                           THEN [Quantity] ELSE 0 END) AS [Rework forbrug]
                      ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'REWORK' 
@@ -296,7 +296,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      END AS [Prod.ordre status]
                      ,ICR.[Cross-Reference No_] AS [Stregkode]
                      ,RECEPT.[No_] AS [Receptnummer],ILE.[Rework afgang]
-                     ,MIN(ILE.[Posting Date]) AS 
+                     ,ILE.[Posting Date] AS [Produktionsdato]
                      ,ILE.[Rework forbrug],ILE.[Slat afgang],ILE.[Slat forbrug]
                      FROM [dbo].[BKI foods a_s$Production Order] AS PO
                      INNER JOIN [dbo].[BKI foods a_s$Item] AS I
@@ -306,7 +306,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                     	AND ICR.[Cross-Reference Type] = 3
                      LEFT JOIN [RECEPT] ON PO.[No_] = RECEPT.[Prod_ Order No_]
                      LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
-                     WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = {req_order_no} """
+                     WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_order_no}' """
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
 
 
@@ -434,14 +434,14 @@ df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 related_orders = string_to_sql(['041367','041344','041234'])
 
-query_probat_ulg = f""" SELECT MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
-                   ,[PRODUCTION_ORDER_ID] AS [Probat id] ,MIN([SOURCE_NAME]) AS [Mølle]
+query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                   ,[PRODUCTION_ORDER_ID] AS [Probat id] ,[SOURCE_NAME] AS [Mølle]
                    ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
-                   ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                   ,[DEST_NAME] AS [Silo],SUM([WEIGHT]) / 1000.0 AS [Kilo]
                    FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                    WHERE [ORDER_NAME] IN ({related_orders})
-                   GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME]
-                   ,[D_CUSTOMER_CODE] """
+                   GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME],[DEST_NAME],[SOURCE_NAME]
+                   ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
 
@@ -455,13 +455,15 @@ if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
 
 
 query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
-                        ,MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
+                        ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                         ,[SOURCE_NAME] AS [Rister] ,[PRODUCTION_ORDER_ID] AS [Probat id]
                     	,[ORDER_NAME] AS [Ordrenummer] ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+						,[DEST_NAME] AS [Silo]
                         FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
                         WHERE [ORDER_NAME] IN ({related_orders})
                         GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
-                        ,[ORDER_NAME] """
+                        ,[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+						,[DEST_NAME] """
 df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
 

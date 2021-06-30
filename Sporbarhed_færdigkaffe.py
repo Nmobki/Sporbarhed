@@ -56,7 +56,7 @@ def log_insert(event, note):
     dict_log = {'Note': note
                 ,'Event': event}
     pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dev', if_exists='append', index=False)
-    
+
 def get_nav_item_info(item_no, field):
     df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
     return df_temp[field].iloc[0]
@@ -267,7 +267,7 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
-query_nav_generelt = f""" WITH [RECEPT] AS ( 
+query_nav_generelt = f""" WITH [RECEPT] AS (
                      SELECT	POC.[Prod_ Order No_],I.[No_]
                      FROM [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
                      INNER JOIN [dbo].[BKI foods a_s$Item] AS I

@@ -855,14 +855,16 @@ else: # Write into log if no data is found or section is out of scope
 
 # =============================================================================
 # Nogenlunde indsæt i Word
-# doc.add_paragraph('Test tekst!!!')
-# doc.save(path_file_doc)
+doc.add_paragraph('Test tekst!!!')
 # =============================================================================
 
 
 #Save files
 excel_writer.save()
 log_insert(script_name, 'Excel file created')
+
+doc.save(path_file_doc)
+log_insert(script_name, 'Word document created')
 # *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
 

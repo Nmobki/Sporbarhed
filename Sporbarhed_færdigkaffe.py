@@ -69,6 +69,18 @@ def convert_placeholders_word(string):
     else:
         return string
 
+# # Change Word page format between landscape and horizontal
+# def page_orientation_word(orientation):
+#     x = 21
+#     y = 29.7
+#     new_section
+#     if orientation == 'Portrait':
+#         pass
+#     elif orientation == 'Landscape':
+#         pass
+#     else:
+#         return None
+
 # Add dataframe to word document
 def add_section_to_word(dataframe,section, pagebreak):
     # Add section header

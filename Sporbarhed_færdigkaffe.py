@@ -62,6 +62,13 @@ def get_nav_item_info(item_no, field):
     df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
     return df_temp[field].iloc[0]
 
+# Convert placeholder values from dataframe to empty string for Word document
+def convert_placeholders_word(string):
+    if string in ['None','nan','NaT']:
+        return ''
+    else:
+        return string
+
 # Add dataframe to word document
 def add_section_to_word(dataframe,section, pagebreak):
     # Add section header
@@ -76,7 +83,7 @@ def add_section_to_word(dataframe,section, pagebreak):
     # Add data from dataframe to the table
     for x in range(dataframe.shape[0]):
         for y in range(dataframe.shape[-1]):
-            table.cell(x+1,y).text = str(dataframe.values[x,y])
+            table.cell(x+1,y).text =  convert_placeholders_word(str(dataframe.values[x,y]))
     # Add page break
     if pagebreak == True:
         doc.add_page_break()  
@@ -236,12 +243,14 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    WHERE KP.[Ordrenummer] = '{req_order_no}' """
 df_prøver = pd.read_sql(query_ds_samples, con_04)
 
-query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre]
-                      ,[Smag_Krop] ,[Smag_Aroma] ,[Smag_Eftersmag]
-                      ,[Smag_Robusta] ,[Bemærkning]
+query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre] AS [Syre]
+                      ,[Smag_Krop] AS [Krop] ,[Smag_Aroma] AS [Aroma] 
+                      ,[Smag_Eftersmag] AS [Eftersmag],[Smag_Robusta] AS [Robusta] ,[Bemærkning]
                       FROM [cof].[Smageskema]
                       WHERE [Referencetype] = 2	
-                          AND [Referencenummer] = '{req_order_no}' """
+                          AND [Referencenummer] = '{req_order_no}'
+                          AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
+                            [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
 query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
@@ -523,7 +532,8 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
         df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
         df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
-        df_results_generelt['Produktionsdato'] = '2021-02-03,2021-02-04'
+        df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
+        df_results_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')
         df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
         df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
         df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
@@ -578,6 +588,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_probat_ulg['Receptnavn'] = df_probat_ulg['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
+        df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
         df_probat_ulg = df_probat_ulg[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulg, section_name, False)
@@ -602,6 +613,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
+        df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
         df_probat_ulr = df_probat_ulr[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulr, section_name, False)
@@ -648,6 +660,7 @@ column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kil
 
 if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
         df_nav_debitorer = df_nav_debitorer[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_debitorer, section_name, False)
@@ -734,6 +747,7 @@ timestamp = datetime.now()
 
 if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_karakterer['Dato'] = df_karakterer['Dato'].dt.strftime('%d-%m-%Y')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_karakterer, section_name, False)
         add_section_to_word(df_karakterer, section_name, True)
@@ -809,6 +823,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
         df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
         df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
+        df_nav_lotno['Produktionstidspunkt'] = df_nav_lotno['Produktionstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_nav_lotno = df_nav_lotno[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_lotno, section_name, False)
@@ -833,6 +848,7 @@ df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
 
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
@@ -858,6 +874,7 @@ df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
 
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
@@ -897,7 +914,6 @@ log_insert(script_name, 'Excel file created')
 
 doc.save(path_file_doc)
 log_insert(script_name, 'Word document created')
-# *** TODO SAVE WORD DOCUMENT
 # *** TODO SAVE PDF FILE
 
 # =============================================================================
@@ -909,7 +925,7 @@ dict_email_log = {'Filsti': filepath
                   ,'Emne': f'Anmodet rapport for ordre {req_order_no}'
                   ,'Forespørgsels_id': req_id
                   ,'Note':req_note}
-pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+# pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
 log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
 # =============================================================================

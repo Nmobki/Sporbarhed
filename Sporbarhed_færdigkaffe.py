@@ -63,16 +63,22 @@ def get_nav_item_info(item_no, field):
     return df_temp[field].iloc[0]
 
 # Add dataframe to word document
-def add_dateframe_to_word(dataframe):
+def add_section_to_word(section, dataframe):
+    # Add section header
+    doc.add_heading(section, 1)
     # Add a table with an extra row for headers
     table = doc.add_table(dataframe.shape[0]+1, dataframe.shape[1])
+    table.style = 'Table Grid'
     # Add headers to top row
     for i in range(dataframe.shape[-1]):
         table.cell(0,i).text = dataframe.columns[i]
+        table.cell(0,i).paragraphs[0].runs[0].font.bold = True # Bold header
     # Add data from dataframe to the table
     for x in range(dataframe.shape[0]):
         for y in range(dataframe.shape[-1]):
-            table.cell(x+1,y).text = dataframe.values[x,y]
+            table.cell(x+1,y).text = str(dataframe.values[x,y])
+    # Add page break
+    doc.add_break(docx.text.WD_BREAK.PAGE)
 
 # =============================================================================
 # Variables for query connections
@@ -508,7 +514,7 @@ column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkeli
                 'Nitrogen', 'Henstandsprøver', 'Referenceprøver', 'Kontrolprøver',
                 'Bemærkning opstart', 'Lotnumre produceret', 'Slat forbrug',
                 'Slat afgang', 'Rework forbrug', 'Rework afgang' ,'Prod.ordre status']
-
+#add_dateframe_to_word(df_results_generelt[column_order].transpose())
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
@@ -526,7 +532,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt[column_order].transpose(), section_name, True)
         # *** TO DO: Insert into Word
-        add_dateframe_to_word(df_results_generelt[column_order].transpose())
+        #add_dataframe_to_word(df_results_generelt[column_order].transpose())
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
@@ -547,7 +553,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_færdigvaretilgang[column_order], section_name, False)
-        # *** TO DO: Insert into Word
+        add_section_to_word(section_name, df_nav_færdigvaretilgang[column_order])
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log

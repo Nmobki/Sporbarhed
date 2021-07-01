@@ -72,7 +72,7 @@ def convert_placeholders_word(string):
 # Change Word page format between landscape and horizontal
 def page_orientation_word(orientation):
     x = 7772400
-    y = 10058400
+    y = 10972800
     if orientation == 'Portrait':
         return [x,y]
     elif orientation == 'Landscape':

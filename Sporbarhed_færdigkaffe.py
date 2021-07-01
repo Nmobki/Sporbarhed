@@ -78,7 +78,7 @@ def add_section_to_word(section, dataframe):
         for y in range(dataframe.shape[-1]):
             table.cell(x+1,y).text = str(dataframe.values[x,y])
     # Add page break
-    doc.paragraphs[0].runs[0].add_break(docx.text.run.WD_BREAK.PAGE)
+    doc.paragraphs[doc_section].runs[0].add_break(docx.text.run.WD_BREAK.PAGE)
 
 # =============================================================================
 # Variables for query connections
@@ -153,12 +153,15 @@ filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporba
 file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
 
 doc = docx.Document()
-doc_name = f'{file_name}.docx'
-path_file_doc = filepath + r'\\' + doc_name
 doc.add_heading(f'Rapport for produktionsordre {req_order_no}',0)
 doc.add_paragraph('')
 doc.sections[0].header.paragraphs[0].text = f'\t{script_name}\t'
 doc.sections[0].footer.paragraphs[0].text = f'\t{timestamp}\t'
+doc_section = 0
+doc_name = f'{file_name}.docx'
+path_file_doc = filepath + r'\\' + doc_name
+
+
 
 wb = openpyxl.Workbook()
 wb_name = f'{file_name}.xlsx'
@@ -528,7 +531,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
         df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
-        df_results_generelt = df_results_generelt[column_order].transpose()
+        df_results_generelt = df_results_generelt[column_order].transpose()        
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt, section_name, True)
         # *** TO DO: Insert into Word
@@ -549,12 +552,12 @@ section_name = get_section_name(section_id)
 timestamp = datetime.now()
 column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
 
-add_section_to_word(section_name, df_nav_færdigvaretilgang[column_order])
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_færdigvaretilgang, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_nav_færdigvaretilgang)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -579,6 +582,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         df_probat_ulg = df_probat_ulg[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulg, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_probat_ulg)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -603,6 +607,7 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
         df_probat_ulr = df_probat_ulr[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_ulr, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_probat_ulr)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -627,6 +632,7 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         df_probat_lr = df_probat_lr[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_lr, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_probat_lr)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -649,6 +655,7 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         df_nav_debitorer = df_nav_debitorer[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_debitorer, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_nav_debitorer)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -691,6 +698,7 @@ if get_section_status_code(df_massebalance, get_section_visibility(df_sections, 
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_massebalance, section_name, True)
+        doc_section += 1
         add_section_to_word(section_name, df_massebalance)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -714,6 +722,7 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
         df_com_statistics = df_com_statistics[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_com_statistics, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_com_statistics)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -734,6 +743,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_karakterer, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_karakterer)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -756,6 +766,7 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
         df_nav_consumption = df_nav_consumption[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_consumption, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_nav_consumption)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -781,6 +792,7 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
         df_nav_components = df_nav_components[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_nav_components)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -810,6 +822,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_nav_lotno = df_nav_lotno[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_lotno, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_nav_lotno)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -834,6 +847,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_temp)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -859,6 +873,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_temp)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
@@ -880,6 +895,7 @@ if get_section_status_code(df_section_log, get_section_visibility(df_sections, s
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_section_log, section_name, False)
+        doc_section += 1
         add_section_to_word(section_name, df_section_log)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)

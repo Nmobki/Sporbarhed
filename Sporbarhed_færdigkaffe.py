@@ -80,12 +80,12 @@ def add_section_to_word(dataframe, section, pagebreak):
     for i in range(dataframe.shape[-1]):
         table.cell(0,i).text = dataframe.columns[i]
         table.cell(0,i).paragraphs[0].runs[0].font.bold = True # Bold header
-    # Add data from dataframe to the table
+    # Add data from dataframe to the table, replace supposed blank cells using function
     for x in range(dataframe.shape[0]):
         for y in range(dataframe.shape[-1]):
             table.cell(x+1,y).text =  convert_placeholders_word(str(dataframe.values[x,y]))
     # Add page break
-    if pagebreak == True:
+    if pagebreak:
         doc.add_page_break()  
 
 
@@ -164,10 +164,15 @@ file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
 doc = docx.Document()
 doc.add_heading(f'Rapport for produktionsordre {req_order_no}',0)
 doc.add_paragraph('')
-doc.sections[0].header.paragraphs[0].text = f'\t{script_name}\t'
-doc.sections[0].footer.paragraphs[0].text = f'\t{timestamp}\t'
+doc.sections[0].header.paragraphs[0].text = f'{script_name}'
+doc.sections[0].footer.paragraphs[0].text = f'{timestamp}'
 doc.sections[0].page_width = docx.shared.Mm(297)
 doc.sections[0].page_height = docx.shared.Mm(210)
+doc.sections[0].top_margin = docx.shared.Mm(15)
+doc.sections[0].bottom_margin = docx.shared.Mm(15)
+doc.sections[0].left_margin = docx.shared.Mm(10)
+doc.sections[0].right_margin = docx.shared.Mm(10)
+doc.sections[0].orientation = docx.enum.section.WD_ORIENT.LANDSCAPE
 
 doc_name = f'{file_name}.docx'
 path_file_doc = filepath + r'\\' + doc_name
@@ -565,16 +570,24 @@ column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Reguler
 
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
+        #df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
+        # Create total for dataframe
+        dict_færdigvare_total = {'Produceret': df_nav_færdigvaretilgang['Produceret'].sum(),
+                                 'Salg': df_nav_færdigvaretilgang['Salg'].sum(),
+                                 'Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
+                                 'Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum()}
+        df_temp_total = pd.concat(df_nav_færdigvaretilgang,
+                                  pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='index'))
+        df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_færdigvaretilgang, section_name, False)
-        add_section_to_word(df_nav_færdigvaretilgang, section_name, True)
+        insert_dataframe_into_excel (df_temp_total, section_name, False)
+        add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -750,7 +763,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_karakterer['Dato'] = df_karakterer['Dato'].dt.strftime('%d-%m-%Y')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_karakterer, section_name, False)
-        add_section_to_word(df_karakterer, section_name, True)
+        add_section_to_word(df_karakterer, section_name, False)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
@@ -897,6 +910,8 @@ timestamp = datetime.now()
 
 if get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        df_section_log['Start_tid'] = df_section_log['Start_tid'].dt.strftime('%H:%M%:%S')
+        df_section_log['Slut_tid'] = df_section_log['Slut_tid'].dt.strftime('%H:%M%:%S')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_section_log, section_name, False)
         add_section_to_word(df_section_log, section_name, True)

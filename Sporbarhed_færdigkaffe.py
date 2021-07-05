@@ -848,10 +848,12 @@ column_order = ['Lotnummer', 'Pallenummer', 'Produktionstidspunkt', 'Kontrollere
                 'Kontrol bemærkning', 'Kontroltidspunkt', 'Kilo', 'Antal poser',
                 'Antal leakers', 'Leakers pct', 'Resultat af kontrol']
 
-if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
+
+if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
                                 right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
+        df_nav_lotno['Antal leakers'].fillna(value=0, inplace=True)
         df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
         df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
         df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])

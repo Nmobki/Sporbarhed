@@ -546,7 +546,10 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
         df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
-        df_results_generelt = df_results_generelt[column_order].transpose()        
+        
+        df_results_generelt = df_results_generelt[column_order].transpose()
+        df_results_generelt = df_results_generelt.reset_index()
+        df_results_generelt.columns = ['Sektion','Værdi']
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt, section_name, True)
         add_section_to_word(df_results_generelt, section_name, True)
@@ -703,7 +706,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 8
 section_name = get_section_name(section_id)
-column_order = ['Sektion','Værdi']
 
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),

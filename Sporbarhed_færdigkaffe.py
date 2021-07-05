@@ -703,6 +703,8 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 8
 section_name = get_section_name(section_id)
+column_order = ['Sektion','Værdi']
+
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                      '[3] Difference': None,
@@ -724,7 +726,8 @@ dict_massebalance['[11] Difference'] = ( dict_massebalance['[5] Færdigvaretilga
     - dict_massebalance['[10] Restlager'] )
 dict_massebalance['[12] Difference pct'] = dict_massebalance['[11] Difference'] / dict_massebalance['[5] Færdigvaretilgang']
 
-df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index')
+df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
+df_massebalance.columns = ['Sektion','Værdi']
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
     try:

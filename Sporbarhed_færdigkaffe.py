@@ -36,8 +36,8 @@ def get_section_status_code(dataframe, visibility):
         return 99 # Continue
 
 # Write into section log
-def section_log_insert(start_time, section, statuscode):
-    df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode, 'Start_tid':start_time}, index=[0])
+def section_log_insert(section, statuscode):
+    df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode}, index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
@@ -276,8 +276,7 @@ df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
 
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
-                       ,SL.[Start_tid],SL.[Registreringstidspunkt] AS [Slut tid]
-                	   ,DATEDIFF(ms, SL.[Start_tid] ,SL.[Registreringstidspunkt]) / 1000.0 AS [Sekunder]
+                       ,SL.[Registreringstidspunkt]
                        FROM [trc].[Sporbarhed_sektion_log] AS SL
                        INNER JOIN [trc].[Sporbarhed_sektion] AS S
                          	ON SL.[Sektion] = S.[Id]
@@ -526,7 +525,6 @@ df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
 # =============================================================================
 section_id = 1
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkelinje',
                 'Produktionsdato', 'Pakketidspunkt', 'Stregkode', 'Ordrenummer',
                 'Smagning status', 'Opstartssilo', 'Igangsat af', 'Taravægt',
@@ -553,11 +551,11 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         insert_dataframe_into_excel (df_results_generelt, section_name, True)
         add_section_to_word(df_results_generelt, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -565,7 +563,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 3
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -581,11 +578,11 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -593,7 +590,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 4
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
                 'Probat id', 'Ordrenummer', 'Kilo']
 
@@ -611,11 +607,11 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -623,7 +619,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 5
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
                 'Probat id', 'Ordrenummer', 'Kilo']
 
@@ -641,11 +636,11 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -653,7 +648,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 6
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
                 'Ordrenummer','Kilo']
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
@@ -669,11 +663,11 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -681,7 +675,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 7
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
 
 if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
@@ -698,11 +691,11 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -710,7 +703,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 8
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                      '[3] Difference': None,
@@ -740,11 +732,11 @@ if get_section_status_code(df_massebalance, get_section_visibility(df_sections, 
         insert_dataframe_into_excel (df_massebalance, section_name, True)
         add_section_to_word(df_massebalance, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -752,7 +744,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 11
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Total vægt', 'Antal enheder', 'Middelvægt', 'Standardafvigelse',
                 'Gns. godvægt per enhed', 'Godvægt total', 'Nominel vægt', 'Taravægt']
 
@@ -763,11 +754,11 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
         insert_dataframe_into_excel (df_com_statistics, section_name, False)
         add_section_to_word(df_com_statistics, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -775,7 +766,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 12
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 
 if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -784,11 +774,11 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         insert_dataframe_into_excel (df_karakterer, section_name, False)
         add_section_to_word(df_karakterer, section_name, False)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -796,7 +786,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 13
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Varenummer','Varenavn','Basisenhed','Antal']
 
 if get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)) == 99:
@@ -806,11 +795,11 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
         insert_dataframe_into_excel (df_nav_consumption, section_name, False)
         add_section_to_word(df_nav_consumption, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -818,7 +807,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 14
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
                 'Pakkedato','Købsordre']
 
@@ -831,11 +819,11 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
         insert_dataframe_into_excel (df_nav_components, section_name, False)
         add_section_to_word(df_nav_components, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -843,7 +831,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 15
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Lotnummer', 'Pallenummer', 'Produktionstidspunkt', 'Kontrolleret af',
                 'Kontrol bemærkning', 'Kontroltidspunkt', 'Kilo', 'Antal poser',
                 'Antal leakers', 'Leakers pct', 'Resultat af kontrol']
@@ -863,11 +850,11 @@ if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, sec
         insert_dataframe_into_excel (df_nav_lotno, section_name, False)
         add_section_to_word(df_nav_lotno, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -875,7 +862,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 16
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Id', 'Registreringstidspunkt', 'Operatør', 'Silo', 'Prøvetype',
                 'Bemærkning', 'Smagning status', 'Antal prøver']
 df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
@@ -888,11 +874,11 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         insert_dataframe_into_excel (df_temp, section_name, False)
         add_section_to_word(df_temp, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -900,7 +886,6 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 17
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 column_order = ['Id','Registreringstidspunkt', 'Operatør', 'Bemærkning',
                 'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
                 'Tintie', 'Vægt', 'Ilt']
@@ -914,11 +899,11 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         insert_dataframe_into_excel (df_temp, section_name, False)
         add_section_to_word(df_temp, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -927,21 +912,19 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 18
 df_section_log = pd.read_sql(query_ds_section_log, con_04)
 section_name = get_section_name(section_id)
-timestamp = datetime.now()
 
 if get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_section_log['Start_tid'] = df_section_log['Start_tid'].dt.strftime('%H:%M%:%S')
-        df_section_log['Slut_tid'] = df_section_log['Slut_tid'].dt.strftime('%H:%M%:%S')
+        df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_section_log, section_name, False)
         add_section_to_word(df_section_log, section_name, True)
         # Write status into log
-        section_log_insert(timestamp, section_id, 0)
+        section_log_insert(section_id, 0)
     except: # Insert error into log
-        section_log_insert(timestamp, section_id, 2)
+        section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)))
 
 
 #Save files

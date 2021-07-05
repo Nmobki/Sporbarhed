@@ -567,27 +567,17 @@ section_id = 3
 section_name = get_section_name(section_id)
 timestamp = datetime.now()
 column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
-dict_færdigvare_total = {'Varenummer':None,
-                         'Varenavn': None,
-                         'Produceret': df_nav_færdigvaretilgang['Produceret'].sum(),
-                         'Salg': df_nav_færdigvaretilgang['Salg'].sum(),
-                         'Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
-                         'Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum()}
-df_temp_fv = pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='index')
-df_temp_total = pd.concat(df_nav_færdigvaretilgang,df_temp_fv)
-df_temp_total = df_temp_total[column_order]
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        #df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
         # Create total for dataframe
-        dict_færdigvare_total = {'Varenummer':'',
-                                 'Varenavn': '',
-                                 'Produceret': df_nav_færdigvaretilgang['Produceret'].sum(),
-                                 'Salg': df_nav_færdigvaretilgang['Salg'].sum(),
-                                 'Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
-                                 'Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum()}
-        df_temp_total = pd.concat(df_nav_færdigvaretilgang,
-                                  pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='index'))
+        dict_færdigvare_total = {'Varenummer': [None],
+                                 'Varenavn': [None],
+                                 'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
+                                 'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
+                                 'Restlager': [df_nav_færdigvaretilgang['Restlager'].sum()],
+                                 'Regulering & ompak': [df_nav_færdigvaretilgang['Regulering & ompak'].sum()]}
+        df_temp_total = pd.concat([df_nav_færdigvaretilgang,
+                                  pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)

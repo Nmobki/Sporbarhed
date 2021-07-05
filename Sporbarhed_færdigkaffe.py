@@ -570,9 +570,7 @@ column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Reguler
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
-        dict_færdigvare_total = {'Varenummer': [None],
-                                 'Varenavn': [None],
-                                 'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
+        dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                  'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
                                  'Restlager': [df_nav_færdigvaretilgang['Restlager'].sum()],
                                  'Regulering & ompak': [df_nav_færdigvaretilgang['Regulering & ompak'].sum()]}
@@ -601,18 +599,23 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
 
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        # Create total for dataframe
+        dict_mølle_total = {'Kilo': [df_probat_ulg['Kilo'].sum()]}
+        # Look up column values and string format datecolumn for export
         df_probat_ulg['Receptnavn'] = df_probat_ulg['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
-        df_probat_ulg = df_probat_ulg[column_order]
+        # Create temp dataframe with total
+        df_temp_total = pd.concat([df_probat_ulg, pd.DataFrame.from_dict(data=dict_mølle_total, orient='columns')])
+        df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_ulg, section_name, False)
-        add_section_to_word(df_probat_ulg, section_name, True)
+        insert_dataframe_into_excel (df_temp_total, section_name, False)
+        add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -626,18 +629,23 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
 
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        # Create total for dataframe
+        dict_rister_total = {'Kilo':[df_probat_ulr['Kilo'].sum()]}
+         # Look up column values and string format datecolumn for export       
         df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
-        df_probat_ulr = df_probat_ulr[column_order]
+        # Create temp dataframe with total
+        df_temp_total = pd.concat([df_probat_ulr, pd.DataFrame.from_dict(data=dict_rister_total, orient='columns')])
+        df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_ulr, section_name, False)
-        add_section_to_word(df_probat_ulr, section_name, True)
+        insert_dataframe_into_excel (df_temp_total, section_name, False)
+        add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -650,17 +658,22 @@ column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
                 'Ordrenummer','Kilo']
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        # Create total for dataframe
+        dict_rister_ind_total = {'Kilo':[df_probat_lr['Kilo'].sum()]}
+         # Look up column values
         df_probat_lr['Sortnavn'] = df_probat_lr['Sortnummer'].apply(get_nav_item_info, field='Beskrivelse')
-        df_probat_lr = df_probat_lr[column_order]
+        # Create temp dataframe with total
+        df_temp_total = pd.concat([df_probat_lr, pd.DataFrame.from_dict(data=dict_rister_ind_total, orient='columns')])
+        df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_lr, section_name, False)
-        add_section_to_word(df_probat_lr, section_name, True)
+        insert_dataframe_into_excel (df_temp_total, section_name, False)
+        add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================
@@ -673,17 +686,23 @@ column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kil
 
 if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        # Create total for dataframe
+        dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
+                              'Kilo':[df_nav_debitorer['Kilo'].sum()]}
+         # Look up column values and string format datecolumn for export     
         df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
-        df_nav_debitorer = df_nav_debitorer[column_order]
+        # Create temp dataframe with total
+        df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
+        df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_nav_debitorer, section_name, False)
-        add_section_to_word(df_nav_debitorer, section_name, True)
+        insert_dataframe_into_excel (df_temp_total, section_name, False)
+        add_section_to_word(df_temp_total, section_name, True)
         # Write status into log
         section_log_insert(timestamp, section_id, 0)
     except: # Insert error into log
         section_log_insert(timestamp, section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(timestamp, section_id, get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)))
+    section_log_insert(timestamp, section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================

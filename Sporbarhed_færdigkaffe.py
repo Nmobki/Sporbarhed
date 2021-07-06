@@ -70,7 +70,7 @@ def convert_placeholders_word(string):
         return string
 
 # Add dataframe to word document
-def add_section_to_word(dataframe, section, pagebreak):
+def add_section_to_word(dataframe, section, pagebreak, has_total):
     # Add section header
     doc.add_heading(section, 1)
     # Add a table with an extra row for headers
@@ -84,6 +84,10 @@ def add_section_to_word(dataframe, section, pagebreak):
     for x in range(dataframe.shape[0]):
         for y in range(dataframe.shape[-1]):
             table.cell(x+1,y).text =  convert_placeholders_word(str(dataframe.values[x,y]))
+    # Bold total row if it exists
+    if has_total:
+        for i in range(dataframe.shape[1] -1):
+            table.rows[len(dataframe)].cells[i].paragraphs[0].runs[0].font.bold = True
     # Add page break
     if pagebreak:
         doc.add_page_break()  
@@ -552,7 +556,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt.columns = ['Sektion','Værdi']
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt, section_name, True)
-        add_section_to_word(df_results_generelt, section_name, True)
+        add_section_to_word(df_results_generelt, section_name, True, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -579,7 +583,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True)
+        add_section_to_word(df_temp_total, section_name, True, True)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -608,7 +612,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True)
+        add_section_to_word(df_temp_total, section_name, True, True)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -637,7 +641,7 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True)
+        add_section_to_word(df_temp_total, section_name, True, True)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -664,7 +668,7 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True)
+        add_section_to_word(df_temp_total, section_name, True, True)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -680,6 +684,8 @@ section_id = 7
 section_name = get_section_name(section_id)
 column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
 
+add_section_to_word(df_nav_debitorer, section_name, True, True)
+
 if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
@@ -692,7 +698,7 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True)
+        add_section_to_word(df_temp_total, section_name, True, True)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -735,7 +741,7 @@ if get_section_status_code(df_massebalance, get_section_visibility(df_sections, 
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_massebalance, section_name, True)
-        add_section_to_word(df_massebalance, section_name, True)
+        add_section_to_word(df_massebalance, section_name, True, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -757,7 +763,7 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
         df_com_statistics = df_com_statistics[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_com_statistics, section_name, False)
-        add_section_to_word(df_com_statistics, section_name, True)
+        add_section_to_word(df_com_statistics, section_name, False, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -777,7 +783,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
         df_karakterer['Dato'] = df_karakterer['Dato'].dt.strftime('%d-%m-%Y')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_karakterer, section_name, False)
-        add_section_to_word(df_karakterer, section_name, False)
+        add_section_to_word(df_karakterer, section_name, False, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -798,7 +804,7 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
         df_nav_consumption = df_nav_consumption[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_consumption, section_name, False)
-        add_section_to_word(df_nav_consumption, section_name, True)
+        add_section_to_word(df_nav_consumption, section_name, False, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -822,7 +828,7 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
         df_nav_components = df_nav_components[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components, section_name, False)
-        add_section_to_word(df_nav_components, section_name, True)
+        add_section_to_word(df_nav_components, section_name, True, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -853,7 +859,7 @@ if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, sec
         df_nav_lotno = df_nav_lotno[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_lotno, section_name, False)
-        add_section_to_word(df_nav_lotno, section_name, True)
+        add_section_to_word(df_nav_lotno, section_name, True, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -877,7 +883,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
-        add_section_to_word(df_temp, section_name, True)
+        add_section_to_word(df_temp, section_name, False, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -902,7 +908,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         df_temp = df_temp[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
-        add_section_to_word(df_temp, section_name, True)
+        add_section_to_word(df_temp, section_name, True, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -923,7 +929,7 @@ if get_section_status_code(df_section_log, get_section_visibility(df_sections, s
         df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_section_log, section_name, False)
-        add_section_to_word(df_section_log, section_name, True)
+        add_section_to_word(df_section_log, section_name, False, False)
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log

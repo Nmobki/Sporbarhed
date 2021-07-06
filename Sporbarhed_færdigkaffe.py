@@ -660,6 +660,8 @@ section_name = get_section_name(section_id)
 column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
                 'Ordrenummer','Kilo']
 
+df_probat_lr['Kilo'] = df_probat_lr['Kilo'].map('{:,.2f}'.format)
+
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
@@ -669,6 +671,8 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_lr, pd.DataFrame.from_dict(data=dict_rister_ind_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        # Number formating
+        df_temp_total['Kilo'] = df_temp_total['Kilo'].map('{:.,2f}'.format)
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])

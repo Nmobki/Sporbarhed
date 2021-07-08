@@ -51,6 +51,16 @@ def string_to_sql(list_with_values):
     else:
         return "'{}'".format("','".join(list_with_values))
 
+def number_format(value, number_type):
+    if number_type == 'dec_2':
+        return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+    if number_type == 'dec_0':
+        return f'{int(round(value,0)):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+    if number_type == 'pct_2':
+        return f'{round(value,4):.2%}'.replace(',', ';').replace('.', ',').replace(';', '.')
+    if number_type == 'pct_0':
+        return f'{round(value,2):.0%}'.replace(',', ';').replace('.', ',').replace(';', '.')
+
 # Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
 def log_insert(event, note):
     dict_log = {'Note': note

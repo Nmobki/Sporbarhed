@@ -557,7 +557,7 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt.columns = ['Sektion','Værdi']
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_results_generelt, section_name, True)
-        add_section_to_word(df_results_generelt, section_name, True, [-1,0])
+        add_section_to_word(df_results_generelt, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log

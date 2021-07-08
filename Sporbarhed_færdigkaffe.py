@@ -54,12 +54,16 @@ def string_to_sql(list_with_values):
 def number_format(value, number_type):
     if number_type == 'dec_2':
         return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+    if number_type == 'dec_1':
+        return f'{round(value,1):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
     if number_type == 'dec_0':
         return f'{int(round(value,0)):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
     if number_type == 'pct_2':
         return f'{round(value,4):.2%}'.replace(',', ';').replace('.', ',').replace(';', '.')
     if number_type == 'pct_0':
         return f'{round(value,2):.0%}'.replace(',', ';').replace('.', ',').replace(';', '.')
+    else:
+        return value
 
 # Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
 def log_insert(event, note):
@@ -176,7 +180,6 @@ file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
 
 doc = docx.Document()
 doc.add_heading(f'Rapport for produktionsordre {req_order_no}',0)
-doc.add_paragraph('')
 doc.sections[0].header.paragraphs[0].text = f'{script_name}'
 doc.sections[0].footer.paragraphs[0].text = f'{timestamp}'
 doc.sections[0].page_width = docx.shared.Mm(297)
@@ -219,7 +222,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                     FROM [cof].[Smageskema] WHERE [Referencetype] = 2
                     GROUP BY [Referencenummer] )
                     SELECT SF.[Referencenummer] AS [Ordrenummer] ,SF.[Pakketidspunkt] ,KH.[Igangsat_af] AS [Igangsat af]
-                    ,KH.[Silo_opstart] AS [Opstartssilo] ,KH.[Taravægt] ,KH.[Nitrogen]
+                    ,KH.[Silo_opstart] AS [Opstartssilo] ,KH.[Taravægt] ,KH.[Nitrogen] / 100.0 AS [Nitrogen]
                     ,KH.[Bemærkning] AS [Bemærkning opstart] ,ISNULL(KP.[Kontrolprøve] ,0) AS [Kontrolprøver]
                     ,ISNULL(KP.[Referenceprøve] ,0) AS [Referenceprøver]
                     ,ISNULL(KP.[Henstandsprøve] ,0) AS [Henstandsprøver]
@@ -250,7 +253,7 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    WHEN KP.[Kontrol_tintie] = 0 THEN 'Ej ok' END AS [Tintie]
 				   ,CASE WHEN KP.[Kontrol_tæthed] = 1 THEN 'Ok'
                    WHEN KP.[Kontrol_tæthed] = 0 THEN 'Ej ok' END AS [Tæthed]
-                   ,KP.[Vægt_aflæst] AS [Vægt],KP.[Kontrol_ilt] AS [Ilt],KP.[Silo]
+                   ,KP.[Vægt_aflæst] AS [Vægt],KP.[Kontrol_ilt] / 100.0 AS [Ilt],KP.[Silo]
                    ,CASE WHEN SK.[Status] = 1 THEN 'Godkendt' WHEN SK.[Status] = 0
                    THEN 'Afvist' ELSE 'Ej smagt' END AS [Smagning status]
 				   ,KP.[Antal_prøver] AS [Antal prøver]
@@ -538,29 +541,41 @@ df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
 # =============================================================================
 section_id = 1
 section_name = get_section_name(section_id)
-column_order = ['Varenummer', 'Varenavn', 'Basisenhed', 'Receptnummer', 'Pakkelinje',
-                'Produktionsdato', 'Pakketidspunkt', 'Stregkode', 'Ordrenummer',
-                'Smagning status', 'Opstartssilo', 'Igangsat af', 'Taravægt',
-                'Nitrogen', 'Henstandsprøver', 'Referenceprøver', 'Kontrolprøver',
-                'Bemærkning opstart', 'Lotnumre produceret', 'Slat forbrug',
-                'Slat afgang', 'Rework forbrug', 'Rework afgang' ,'Prod.ordre status']
+column_order = ['Varenummer', 'Varenavn', 'Basisenhed','Stregkode', 'Receptnummer', 
+                'Pakkelinje', 'Produktionsdato', 'Pakketidspunkt', 'Ordrenummer',
+                'Prod.ordre status', 'Smagning status', 'Opstartssilo', 
+                'Igangsat af', 'Taravægt', 'Nitrogen', 'Henstandsprøver', 
+                'Referenceprøver', 'Kontrolprøver', 'Bemærkning opstart', 
+                'Lotnumre produceret', 'Slat forbrug','Slat afgang', 
+                'Rework forbrug', 'Rework afgang']
+columns_1_dec = ['Slat forbrug', 'Slat afgang', 'Rework forbrug', 'Rework afgang',
+                 'Taravægt']
+columns_0_dec = ['Henstandsprøver','Referenceprøver','Kontrolprøver']
+columns_0_pct = ['Nitrogen']
 
 if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
-    try:
+    try: 
         df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
         df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
         df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
         df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
         df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
-        df_results_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')
-        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
-        df_results_generelt['Lotnumre produceret'] = number_format(len(df_nav_lotno), 'dec_0')
-        df_results_generelt['Slat forbrug'] = number_format(df_nav_generelt['Slat forbrug'].iloc[0], 'dec_2')
-        df_results_generelt['Slat afgang'] = number_format(df_nav_generelt['Slat afgang'].iloc[0], 'dec_2')
-        df_results_generelt['Rework forbrug'] = number_format(df_nav_generelt['Rework forbrug'].iloc[0], 'dec_2')
-        df_results_generelt['Rework afgang'] = number_format(df_nav_generelt['Rework afgang'].iloc[0], 'dec_2')
         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
-        
+        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
+        df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
+        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
+        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
+        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
+        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
+        #Apply column formating
+        for col in columns_1_dec:
+            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'dec_1'))
+        for col in columns_0_dec:
+            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'dec_0'))
+        for col in columns_0_pct:
+            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'pct_0'))
+        df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')        
+       
         df_results_generelt = df_results_generelt[column_order].transpose()
         df_results_generelt = df_results_generelt.reset_index()
         df_results_generelt.columns = ['Sektion','Værdi']
@@ -581,6 +596,7 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 3
 section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
+columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
 
 if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -592,6 +608,9 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
         df_temp_total = pd.concat([df_nav_færdigvaretilgang,
                                   pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
@@ -610,6 +629,7 @@ section_id = 4
 section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
                 'Probat id', 'Ordrenummer', 'Kilo']
+columns_1_dec = ['Kilo']
 
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -621,6 +641,9 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulg, pd.DataFrame.from_dict(data=dict_mølle_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
@@ -639,6 +662,7 @@ section_id = 5
 section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
                 'Probat id', 'Ordrenummer', 'Kilo']
+columns_1_dec = ['Kilo']
 
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -650,6 +674,9 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulr, pd.DataFrame.from_dict(data=dict_rister_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
@@ -668,6 +695,7 @@ section_id = 6
 section_name = get_section_name(section_id)
 column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
                 'Ordrenummer','Kilo']
+columns_1_dec = ['Kilo']
 
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -678,8 +706,9 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_lr, pd.DataFrame.from_dict(data=dict_rister_ind_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
-        # Number formating
-        df_temp_total['Kilo'] = df_temp_total['Kilo'].map('{:.,2f}'.format)
+        # Data formating
+        for col in columns_1_dec:
+            df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
@@ -697,6 +726,7 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 7
 section_name = get_section_name(section_id)
 column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
+columns_1_dec = ['Enheder','Kilo']
 
 if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -708,6 +738,9 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
@@ -810,10 +843,14 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 13
 section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Basisenhed','Antal']
+columns_1_dec = ['Antal']
 
 if get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_consumption = df_nav_consumption[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_nav_consumption[col] = df_nav_consumption[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_consumption, section_name, False)
         add_section_to_word(df_nav_consumption, section_name, False, [0])
@@ -832,12 +869,16 @@ section_id = 14
 section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
                 'Pakkedato','Købsordre']
+columns_1_dec = ['Rullelængde']
 
 if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
         df_nav_components['Varenavn'] = df_nav_components['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_nav_components = df_nav_components[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_nav_components[col] = df_nav_components[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components, section_name, False)
         add_section_to_word(df_nav_components, section_name, True, [0])
@@ -857,7 +898,9 @@ section_name = get_section_name(section_id)
 column_order = ['Lotnummer', 'Pallenummer', 'Produktionstidspunkt', 'Kontrolleret af',
                 'Kontrol bemærkning', 'Kontroltidspunkt', 'Kilo', 'Antal poser',
                 'Antal leakers', 'Leakers pct', 'Resultat af kontrol']
-
+columns_0_dec = ['Antal poser','Antal leakers']
+columns_1_dec = ['Kilo']
+columns_2_pct = ['Leakers pct']
 
 if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)) == 99:
     try:
@@ -869,6 +912,15 @@ if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, sec
         df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
         df_nav_lotno['Produktionstidspunkt'] = df_nav_lotno['Produktionstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_nav_lotno = df_nav_lotno[column_order]
+        # Data formating
+        for col in columns_1_dec:
+            df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: number_format(x, 'dec_1'))
+        # Data formating
+        for col in columns_0_dec:
+            df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: number_format(x, 'dec_0'))
+        # Data formating
+        for col in columns_2_pct:
+            df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: number_format(x, 'pct_2'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_lotno, section_name, False)
         add_section_to_word(df_nav_lotno, section_name, True, [0])
@@ -912,12 +964,20 @@ section_name = get_section_name(section_id)
 column_order = ['Id','Registreringstidspunkt', 'Operatør', 'Bemærkning',
                 'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
                 'Tintie', 'Vægt', 'Ilt']
+columns_2_dec = ['Vægt']
+columns_0_pct = ['Ilt']
 df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
 
 if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_temp = df_temp[column_order]
+        # Data formating
+        for col in columns_2_dec:
+            df_temp[col] = df_temp[col].apply(lambda x: number_format(x, 'dec_2'))
+        # Data formating
+        for col in columns_0_pct:
+            df_temp[col] = df_temp[col].apply(lambda x: number_format(x, 'pct_0'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp, section_name, False)
         add_section_to_word(df_temp, section_name, True, [0])

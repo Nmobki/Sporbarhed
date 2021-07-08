@@ -89,7 +89,6 @@ def add_section_to_word(dataframe, section, pagebreak, rows_to_bold):
     # Add headers to top row
     for i in range(dataframe.shape[-1]):
         table.cell(0,i).text = dataframe.columns[i]
-       # table.cell(0,i).paragraphs[0].runs[0].font.bold = True # Bold header
     # Add data from dataframe to the table, replace supposed blank cells using function
     for x in range(dataframe.shape[0]):
         for y in range(dataframe.shape[-1]):
@@ -555,11 +554,11 @@ if get_section_status_code(df_results_generelt, get_section_visibility(df_sectio
         df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
         df_results_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')
         df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
-        df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
-        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
-        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
-        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
-        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
+        df_results_generelt['Lotnumre produceret'] = number_format(len(df_nav_lotno), 'dec_0')
+        df_results_generelt['Slat forbrug'] = number_format(df_nav_generelt['Slat forbrug'].iloc[0], 'dec_2')
+        df_results_generelt['Slat afgang'] = number_format(df_nav_generelt['Slat afgang'].iloc[0], 'dec_2')
+        df_results_generelt['Rework forbrug'] = number_format(df_nav_generelt['Rework forbrug'].iloc[0], 'dec_2')
+        df_results_generelt['Rework afgang'] = number_format(df_nav_generelt['Rework afgang'].iloc[0], 'dec_2')
         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
         
         df_results_generelt = df_results_generelt[column_order].transpose()
@@ -669,8 +668,6 @@ section_id = 6
 section_name = get_section_name(section_id)
 column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
                 'Ordrenummer','Kilo']
-
-df_probat_lr['Kilo'] = df_probat_lr['Kilo'].map('{:,.2f}'.format)
 
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:

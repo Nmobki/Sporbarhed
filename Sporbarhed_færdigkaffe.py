@@ -239,6 +239,7 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                         ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
 df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
+production_machine = df_results_generelt['Pakkelinje'].iloc[0]
 
 query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	   ,KP.[Registreret_af] AS [Operatør],KP.[Bemærkning]
@@ -367,6 +368,18 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                      WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_order_no}' """
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
+
+production_date = df_nav_generelt['Produktionsdato'].iloc[0]
+
+query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt],V.[Registreret_af]
+                       ,V.[Vægt],V.[Status] ,V.[Serienummer]
+                       FROM [cof].[Vægtkontrol] AS V
+                       INNER JOIN [cof].[Serienummer_pakkelinje] AS SP
+                       ON V.[Serienummer] = SP.[Serienummer]
+                       WHERE SP.[Pakkelinje] = '{production_machine}'
+                       AND DATEADD(d, DATEDIFF(d, 0, V.[Registreringstidspunkt] ), 0) 
+                       BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
+df_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 
 req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES NÅR NAV UDVIKLING ER PÅ PLADS
@@ -808,6 +821,29 @@ if get_section_status_code(df_massebalance, get_section_visibility(df_sections, 
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)))
 
+# =============================================================================
+# Section 10: Vægtkontrol
+# =============================================================================
+section_id = 10
+section_name = get_section_name(section_id)
+column_order = []
+columns_2_dec = ['Vægt']
+
+if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_com_statistics = df_com_statistics[column_order]
+        #Column formating
+        for col in columns_2_dec:
+            df_com_statistics[col] = df_com_statistics[col].apply(lambda x: number_format(x, 'dec_2'))
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_com_statistics, section_name, False)
+        add_section_to_word(df_com_statistics, section_name, False, [0])
+        # Write status into log
+        section_log_insert(section_id, 0)
+    except: # Insert error into log
+        section_log_insert(section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
 
 # =============================================================================
 # Section 11: Ordrestatistik fra e-vejning (poser)

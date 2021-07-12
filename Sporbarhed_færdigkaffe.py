@@ -371,15 +371,16 @@ df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
 
 production_date = df_nav_generelt['Produktionsdato'].iloc[0]
 
-query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt],V.[Registreret_af]
-                       ,V.[Vægt],V.[Status] ,V.[Serienummer]
+query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
+                       ,V.[Registreret_af] AS [Registreret af],V.[Vægt],V.[Serienummer]
+                       ,CASE WHEN V.[Status] = 1 THEN 'Ok' ELSE 'Ej ok' END AS [Status]
                        FROM [cof].[Vægtkontrol] AS V
                        INNER JOIN [cof].[Serienummer_pakkelinje] AS SP
                        ON V.[Serienummer] = SP.[Serienummer]
                        WHERE SP.[Pakkelinje] = '{production_machine}'
                        AND DATEADD(d, DATEDIFF(d, 0, V.[Registreringstidspunkt] ), 0) 
                        BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
-df_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
+df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 
 req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES NÅR NAV UDVIKLING ER PÅ PLADS
@@ -826,24 +827,25 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 10
 section_name = get_section_name(section_id)
-column_order = []
+column_order = ['Registreringstidspunkt','Serienummer','Vægt','Status','Registreret af']
 columns_2_dec = ['Vægt']
 
 if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
     try:
-        df_com_statistics = df_com_statistics[column_order]
+        df_ds_vægtkontrol = df_ds_vægtkontrol[column_order]
+        df_ds_vægtkontrol['Registreringstidspunkt'] = df_ds_vægtkontrol['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         #Column formating
         for col in columns_2_dec:
-            df_com_statistics[col] = df_com_statistics[col].apply(lambda x: number_format(x, 'dec_2'))
+            df_ds_vægtkontrol[col] = df_ds_vægtkontrol[col].apply(lambda x: number_format(x, 'dec_2'))
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_com_statistics, section_name, False)
-        add_section_to_word(df_com_statistics, section_name, False, [0])
+        insert_dataframe_into_excel (df_ds_vægtkontrol, section_name, False)
+        add_section_to_word(df_ds_vægtkontrol, section_name, False, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_ds_vægtkontrol, get_section_visibility(df_sections, section_id)))
 
 # =============================================================================
 # Section 11: Ordrestatistik fra e-vejning (poser)

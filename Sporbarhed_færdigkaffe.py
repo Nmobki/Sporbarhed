@@ -329,8 +329,8 @@ df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
 query_nav_generelt = f""" WITH [RECEPT] AS (
                      SELECT	POC.[Prod_ Order No_],I.[No_]
-                     FROM [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
-                     INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                     FROM [dbo].[BKI foods a_s$Prod_ Order Component] (NOLOCK) AS POC
+                     INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                     	ON POC.[Item No_] = I.[No_]
                      WHERE [POC].[Prod_ Order Line No_] = 10000
                     	AND I.[Sequence Code] = 4)
@@ -343,7 +343,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                           THEN [Quantity] ELSE 0 END) AS [Slat forbrug]
                      ,SUM(CASE WHEN [Entry Type] = 6 AND [Location Code] = 'SLAT' 
                           THEN [Quantity] ELSE 0 END) AS [Slat afgang]
-                     FROM [dbo].[BKI foods a_s$Item Ledger Entry]
+                     FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                      WHERE [Order Type] = 1 GROUP BY [Order No_] )
                      SELECT PO.[Source No_] AS [Varenummer]
                      ,I.[Description] AS [Varenavn]
@@ -358,10 +358,10 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                      ,RECEPT.[No_] AS [Receptnummer],ILE.[Rework afgang]
                      ,ILE.[Posting Date] AS [Produktionsdato]
                      ,ILE.[Rework forbrug],ILE.[Slat afgang],ILE.[Slat forbrug]
-                     FROM [dbo].[BKI foods a_s$Production Order] AS PO
-                     INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                     FROM [dbo].[BKI foods a_s$Production Order] (NOLOCK) AS PO
+                     INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                     	ON PO.[Source No_] = I.[No_]
-                     LEFT JOIN [dbo].[BKI foods a_s$Item Cross Reference] AS ICR
+                     LEFT JOIN [dbo].[BKI foods a_s$Item Cross Reference] (NOLOCK) AS ICR
                     	ON I.[No_] = ICR.[Item No_] AND ICR.[Unit of Measure] = 'PS'
                     	AND ICR.[Cross-Reference Type] = 3
                      LEFT JOIN [RECEPT] ON PO.[No_] = RECEPT.[Prod_ Order No_]
@@ -390,16 +390,16 @@ req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES N�
 # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
 # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
 query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
-                              FROM [dbo].[BKI foods a_s$Item Ledger Entry]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Order No_] IN({req_orders_total})
                               AND [Entry Type] = 6
                               UNION ALL
                               SELECT ILE_O.[Lot No_]
                               FROM [LOT_ORG]
-                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE_C
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                                   ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
                                   AND [ILE_C].[Entry Type] IN (5,8)
-                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry]  AS ILE_O
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
                             	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
                                   AND ILE_O.[Entry Type] IN (6,9) )
                               ,[LOT_SINGLE] AS ( SELECT [Lot No_]
@@ -415,8 +415,8 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                         		THEN ILE.[Quantity] * I.[Net Weight] * -1
                         		ELSE 0 END) AS [Regulering & ompak]
                         	,SUM(ILE.[Remaining Quantity] * I.[Net Weight]) AS [Restlager]
-                            FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
-                            INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                            FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                            INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                             	ON ILE.[Item No_] = I.[No_]
                             INNER JOIN [LOT_SINGLE]
                             	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
@@ -426,15 +426,15 @@ df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
 # Recursive query to get all customer who purchased identified lotnumbers.
 # See explanation of query above
 query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
-                      FROM [dbo].[BKI foods a_s$Item Ledger Entry]
+                      FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                       WHERE [Order No_] IN({req_orders_total}) AND [Entry Type] = 6
                       UNION ALL
                       SELECT ILE_O.[Lot No_]
                       FROM [LOT_ORG]
-                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE_C
+                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                           ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
                     	  AND [ILE_C].[Entry Type] IN (5,8)
-                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry]  AS ILE_O
+                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
                     	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
                     	  AND ILE_O.[Entry Type] IN (6,9) )
                       ,[LOT_SINGLE] AS ( SELECT [Lot No_]
@@ -444,12 +444,12 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                     	  ,ILE.[Item No_] AS [Varenummer]
                     	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
                     	  ,SUM(ILE.[Quantity] * I.[Net Weight] * -1) AS [Kilo]
-                      FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
-                      INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                      FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                      INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                     	  ON ILE.[Item No_] = I.[No_]
                       INNER JOIN [LOT_SINGLE]
                       	  ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                      INNER JOIN [dbo].[BKI foods a_s$Customer] AS C
+                      INNER JOIN [dbo].[BKI foods a_s$Customer] (NOLOCK) AS C
                     	  ON ILE.[Source No_] = C.[No_]
                       WHERE ILE.[Entry Type] = 1
                       GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
@@ -460,13 +460,13 @@ query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
               	  ,[Quantity] * I.[Net Weight] AS [Kilo]
             	  ,CAST(ROUND(ILE.[Quantity] / IUM.[Qty_ per Unit of Measure],0) AS INT) AS [Antal poser]
             	  ,DATEADD(hour, 1, ILE.[Produktionsdato_-tid]) AS [Produktionstidspunkt]
-                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] ILE
-                  INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) ILE
+                  INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                       ON ILE.[Item No_] = I.[No_]
-                  LEFT JOIN [dbo].[BKI foods a_s$Lot No_ Information] AS LI
+                  LEFT JOIN [dbo].[BKI foods a_s$Lot No_ Information] (NOLOCK) AS LI
                 	  ON ILE.[Lot No_] = LI.[Lot No_]
                       AND ILE.[Item No_] = LI.[Item No_]
-                  LEFT JOIN [dbo].[BKI foods a_s$Item Unit of Measure] AS IUM
+                  LEFT JOIN [dbo].[BKI foods a_s$Item Unit of Measure] (NOLOCK) AS IUM
                 	  ON ILE.[Item No_] = IUM.[Item No_]
                       AND IUM.[Code] = 'PS'
                   WHERE ILE.[Order Type] = 1
@@ -481,12 +481,12 @@ query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
                        ,CAST(POAC.[Roll Lenght] AS INT) AS [Rullelængde]
                        ,POAC.[Batch_Lot No_] AS [Lotnummer]
                        ,POAC.[Packaging Date] AS [Pakkedato]
-                       FROM [dbo].[BKI foods a_s$Prod_ Order Add_ Comp_] AS POAC
-                       INNER JOIN [dbo].[BKI foods a_s$Prod_ Order Component] AS POC
+                       FROM [dbo].[BKI foods a_s$Prod_ Order Add_ Comp_] (NOLOCK) AS POAC
+                       INNER JOIN [dbo].[BKI foods a_s$Prod_ Order Component] (NOLOCK) AS POC
                            ON POAC.[Prod_ Order No_] = POC.[Prod_ Order No_]
                            AND POAC.[Prod_ Order Line No_] = POC.[Prod_ Order Line No_]
                            AND POAC.[Prod_ Order Component Line No_] = POC.[Line No_]
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                       INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                            ON POC.[Item No_] = I.[No_]
                        WHERE POAC.[Prod_ Order No_] = '{req_order_no}' """
 df_nav_components = pd.read_sql(query_nav_components, con_nav)
@@ -495,8 +495,8 @@ query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
                     	,I.[Description] AS [Varenavn]
                         ,I.[Base Unit of Measure] AS [Basisenhed]
                         ,SUM(ILE.[Quantity]) * -1 AS [Antal]
-                        FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
-                        INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                        FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                        INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                         	ON ILE.[Item No_] = I.[No_]
                         WHERE ILE.[Order No_] = '{req_order_no}'
                         	AND ILE.[Entry Type] = 5
@@ -569,41 +569,56 @@ columns_1_dec = ['Slat forbrug', 'Slat afgang', 'Rework forbrug', 'Rework afgang
 columns_0_dec = ['Henstandsprøver','Referenceprøver','Kontrolprøver']
 columns_0_pct = ['Nitrogen']
 
-if get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try: 
-        df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
-        df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
-        df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
-        df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
-        df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
-        df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
-        df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
-        df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
-        df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
-        df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
-        df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
-        df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
+# =============================================================================
+#         df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
+#         df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
+#         df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
+#         df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
+#         df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
+#         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
+#         df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
+#         df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
+#         df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
+#         df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
+#         df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
+#         df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
+# =============================================================================
+        df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
+        df_nav_generelt['Pakketidspunkt'] = df_results_generelt['Pakketidspunkt'].iloc[0]
+        df_nav_generelt['Ordrenummer'] = req_order_no
+        df_nav_generelt['Smagning status'] = df_results_generelt['Smagning status'].iloc[0]
+        df_nav_generelt['Opstartssilo'] = df_results_generelt['Opstartssilo'].iloc[0]
+        df_nav_generelt['Igangsat af'] = df_results_generelt['Igangsat af'].iloc[0]
+        df_nav_generelt['Taravægt'] = df_results_generelt['Taravægt'].iloc[0]
+        df_nav_generelt['Nitrogen'] = df_results_generelt['Nitrogen'].iloc[0]
+        df_nav_generelt['Lotnumre produceret'] = len(df_nav_lotno)
+        df_nav_generelt['Henstandsprøver'] = df_results_generelt['Henstandsprøver'].iloc[0]
+        df_nav_generelt['Referenceprøver'] = df_results_generelt['Referenceprøver'].iloc[0]
+        df_nav_generelt['Kontrolprøver'] = df_results_generelt['Kontrolprøver'].iloc[0]
+        df_nav_generelt['Bemærkning opstart'] = df_results_generelt['Bemærkning opstart'].iloc[0]
         #Apply column formating
         for col in columns_1_dec:
-            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'dec_1'))
+            df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'dec_1'))
         for col in columns_0_dec:
-            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'dec_0'))
+            df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'dec_0'))
         for col in columns_0_pct:
-            df_results_generelt[col] = df_results_generelt[col].apply(lambda x: number_format(x, 'pct_0'))
-        df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')        
+            df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'pct_0'))
+        df_nav_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')        
        
-        df_results_generelt = df_results_generelt[column_order].transpose()
-        df_results_generelt = df_results_generelt.reset_index()
-        df_results_generelt.columns = ['Sektion','Værdi']
+        df_nav_generelt = df_nav_generelt[column_order].transpose()
+        df_nav_generelt = df_nav_generelt.reset_index()
+        df_nav_generelt.columns = ['Sektion','Værdi']
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_results_generelt, section_name, True)
-        add_section_to_word(df_results_generelt, section_name, True, [0])
+        insert_dataframe_into_excel (df_nav_generelt, section_name, True)
+        add_section_to_word(df_nav_generelt, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_results_generelt, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)))
 
 
 # =============================================================================

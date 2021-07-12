@@ -201,7 +201,7 @@ path_file_wb = filepath + r'\\' + wb_name
 excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
 
 # =============================================================================
-# Read setup for section for reporttypes
+# Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
 # =============================================================================
 query_ds_reporttypes =  f"""SELECT SRS.[Sektion] ,SRS.[Sektion_synlig] ,SS.[Beskrivelse] AS [Sektion navn]
                        FROM [trc].[Sporbarhed_rapport_sektion] AS SRS
@@ -214,6 +214,7 @@ df_sections = pd.read_sql(query_ds_reporttypes, con_04)
 # =============================================================================
 # Queries for different parts of report
 # =============================================================================
+# Query to read various information from BKI_Datastore for the order requested in the report
 query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                 	,SUM( CASE WHEN [Prøvetype] = 0 THEN [Antal_prøver] ELSE 0 END) AS [Kontrolprøve]
                 	,SUM( CASE WHEN [Prøvetype] = 1 THEN [Antal_prøver] ELSE 0 END) AS [Referenceprøve]
@@ -239,8 +240,11 @@ query_ds_generelt = f""" WITH [KP] AS ( SELECT [Ordrenummer]
                         ON SF.[Referencenummer] = SK.[Referencenummer]
                     WHERE SF.[Id] = {req_id} """
 df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
+
 production_machine = df_results_generelt['Pakkelinje'].iloc[0]
 
+# Query to get all samples registrered for the requested order.
+# Dataframe to be filtered later on to split by sample type.
 query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspunkt]
             	   ,KP.[Registreret_af] AS [Operatør],KP.[Bemærkning]
                    ,KP.[Prøvetype] AS [Prøvetype int],P.[Beskrivelse] AS [Prøvetype]
@@ -269,6 +273,8 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    WHERE KP.[Ordrenummer] = '{req_order_no}' """
 df_prøver = pd.read_sql(query_ds_samples, con_04)
 
+# All grades given for the requested order. Coalesce is to ensure that query
+# returns no results if record exists but no grades have been given
 query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre] AS [Syre]
                       ,[Smag_Krop] AS [Krop] ,[Smag_Aroma] AS [Aroma] 
                       ,[Smag_Eftersmag] AS [Eftersmag],[Smag_Robusta] AS [Robusta] ,[Bemærkning]
@@ -279,6 +285,8 @@ query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre] AS [Syre]
                             [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
+# If lotnumbers from requested order have been checked for leakage the information
+# from the check is returned with this query. Will often return no results
 query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
                    ,[Initialer] AS [Kontrolleret af],[Lotnummer]
                    ,[Pallenummer],[Antal_poser] AS [Antal leakers]
@@ -288,11 +296,14 @@ query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
                    FROM [cof].[Vac_slip] """
 df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
 
+# Primary packaging material - valve for bag
 query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
                   FROM [cof].[Ventil_registrering]
                   WHERE [Ordrenummer] = '{req_order_no}' """
 df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
 
+# Query section log for each section logged per script-run.
+# Query is only executed at the end of the script
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
                        ,SL.[Registreringstidspunkt]
@@ -303,6 +314,7 @@ query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                             ON SL.[Statuskode] = SS.[Id]
                        WHERE SL.[Forespørgsels_id] = {req_id} """
 
+# Order statistics from Comscale. Only for good bags (trade)
 query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
                        ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
@@ -323,10 +335,13 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
+# Query for Navision items, used for adding information to item numbers not queried
+# directly from Navision
 query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
+# Query to pull various information from Navision for the requested order.
 query_nav_generelt = f""" WITH [RECEPT] AS (
                      SELECT	POC.[Prod_ Order No_],I.[No_]
                      FROM [dbo].[BKI foods a_s$Prod_ Order Component] (NOLOCK) AS POC
@@ -371,6 +386,7 @@ df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
 
 production_date = df_nav_generelt['Produktionsdato'].iloc[0]
 
+# Control of scales in packing area, 3 days back and 1 day ahead of production date
 query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
                        ,V.[Registreret_af] AS [Registreret af],V.[Vægt],V.[Serienummer]
                        ,CASE WHEN V.[Status] = 1 THEN 'Ok' ELSE 'Ej ok' END AS [Status]
@@ -455,6 +471,7 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                       GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
+# Lotnumber information for the originally requested order
 query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
             	  ,LI.[Certificate Number] AS [Pallenummer]
               	  ,[Quantity] * I.[Net Weight] AS [Kilo]
@@ -474,6 +491,7 @@ query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
                       AND ILE.[Order No_] = '{req_order_no}' """
 df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
 
+# Primary packaging components used for the originally requested order
 query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
                 	   ,I.[Description] AS [Varenavn]
                        ,POAC.[Purchase Order No_] AS [Købsordre]
@@ -491,6 +509,7 @@ query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
                        WHERE POAC.[Prod_ Order No_] = '{req_order_no}' """
 df_nav_components = pd.read_sql(query_nav_components, con_nav)
 
+# Components used for the originally requested order
 query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
                     	,I.[Description] AS [Varenavn]
                         ,I.[Base Unit of Measure] AS [Basisenhed]
@@ -507,6 +526,7 @@ df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
 # OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
 related_orders = string_to_sql(['041367','041344','041234'])
 
+# Related grinding orders - information for batches out of grinder to include rework
 query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                    ,[PRODUCTION_ORDER_ID] AS [Probat id] ,[SOURCE_NAME] AS [Mølle]
                    ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
@@ -517,7 +537,7 @@ query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) 
                    ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
-
+# Find related roasting orders from any related grinding orders
 query_probat_lg = f""" SELECT [S_ORDER_NAME]
                        FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
                        WHERE [ORDER_NAME] IN ({related_orders})
@@ -526,7 +546,7 @@ if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
     df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
     related_orders = related_orders + ',' + string_to_sql(df_probat_lg['S_ORDER_NAME'].unique().tolist())
 
-
+# Find information for identified roasting orders, batches out of roaster
 query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                         ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                         ,[SOURCE_NAME] AS [Rister] ,[PRODUCTION_ORDER_ID] AS [Probat id]
@@ -539,7 +559,7 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
 						,[DEST_NAME] """
 df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
-
+# Find green coffee related to orders
 query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                 ,[S_CONTRACT_NO] AS [Kontraktnummer]
                 ,[S_DELIVERY_NAME] AS [Modtagelse],[ORDER_NAME] AS [Ordrenummer]
@@ -571,20 +591,6 @@ columns_0_pct = ['Nitrogen']
 
 if get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)) == 99:
     try: 
-# =============================================================================
-#         df_results_generelt['Varenummer'] = df_nav_generelt['Varenummer'].iloc[0]
-#         df_results_generelt['Varenavn'] = df_nav_generelt['Varenavn'].iloc[0]
-#         df_results_generelt['Basisenhed'] = df_nav_generelt['Basisenhed'].iloc[0]
-#         df_results_generelt['Receptnummer'] = df_nav_generelt['Receptnummer'].iloc[0]
-#         df_results_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].iloc[0]
-#         df_results_generelt['Prod.ordre status'] = df_nav_generelt['Prod.ordre status'].iloc[0]
-#         df_results_generelt['Stregkode'] = df_nav_generelt['Stregkode'].iloc[0]
-#         df_results_generelt['Lotnumre produceret'] = len(df_nav_lotno)
-#         df_results_generelt['Slat forbrug'] = df_nav_generelt['Slat forbrug'].iloc[0]
-#         df_results_generelt['Slat afgang'] = df_nav_generelt['Slat afgang'].iloc[0]
-#         df_results_generelt['Rework forbrug'] = df_nav_generelt['Rework forbrug'].iloc[0]
-#         df_results_generelt['Rework afgang'] = df_nav_generelt['Rework afgang'].iloc[0]
-# =============================================================================
         df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
         df_nav_generelt['Pakketidspunkt'] = df_results_generelt['Pakketidspunkt'].iloc[0]
         df_nav_generelt['Ordrenummer'] = req_order_no
@@ -925,7 +931,7 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
             df_nav_consumption[col] = df_nav_consumption[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_consumption, section_name, False)
-        add_section_to_word(df_nav_consumption, section_name, False, [0])
+        add_section_to_word(df_nav_consumption, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log

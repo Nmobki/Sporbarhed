@@ -171,7 +171,6 @@ cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
 cursor_04.commit()
 log_insert(script_name, f'Request id: {req_id} initiated')
 
-
 # =============================================================================
 # Variables for files generated
 # =============================================================================
@@ -757,6 +756,9 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 8
 section_name = get_section_name(section_id)
+columns_1_dec = ['[1] Råkaffe','[2] Ristet kaffe','[3] Difference','[5] Færdigvaretilgang',
+                 '[6] Difference','[8] Salg','[9] Regulering & ompak','[10] Restlager','[11] Difference']
+columns_2_pct = ['[4] Difference pct','[7] Difference pct','[12] Difference pct']
 
 dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
@@ -778,9 +780,15 @@ dict_massebalance['[11] Difference'] = ( dict_massebalance['[5] Færdigvaretilga
     - dict_massebalance['[8] Salg'] - dict_massebalance['[9] Regulering & ompak']
     - dict_massebalance['[10] Restlager'] )
 dict_massebalance['[12] Difference pct'] = dict_massebalance['[11] Difference'] / dict_massebalance['[5] Færdigvaretilgang']
+#Number formating
+for col in columns_1_dec:
+    dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')
+for col in columns_2_pct:
+    dict_massebalance[col] = number_format(dict_massebalance[col] ,'pct_2')
 
 df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
 df_massebalance.columns = ['Sektion','Værdi']
+df_massebalance['Bemærkning'] = None
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
     try:

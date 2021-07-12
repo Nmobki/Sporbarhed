@@ -52,17 +52,20 @@ def string_to_sql(list_with_values):
         return "'{}'".format("','".join(list_with_values))
 
 def number_format(value, number_type):
-    if number_type == 'dec_2':
-        return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-    if number_type == 'dec_1':
-        return f'{round(value,1):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-    if number_type == 'dec_0':
-        return f'{int(round(value,0)):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-    if number_type == 'pct_2':
-        return f'{round(value,4):.2%}'.replace(',', ';').replace('.', ',').replace(';', '.')
-    if number_type == 'pct_0':
-        return f'{round(value,2):.0%}'.replace(',', ';').replace('.', ',').replace(';', '.')
-    else:
+    try:
+        if number_type == 'dec_2':
+            return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+        if number_type == 'dec_1':
+            return f'{round(value,1):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+        if number_type == 'dec_0':
+            return f'{int(round(value,0)):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
+        if number_type == 'pct_2':
+            return f'{round(value,4):.2%}'.replace(',', ';').replace('.', ',').replace(';', '.')
+        if number_type == 'pct_0':
+            return f'{round(value,2):.0%}'.replace(',', ';').replace('.', ',').replace(';', '.')
+        else:
+            return value
+    except:
         return value
 
 # Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
@@ -89,7 +92,7 @@ def add_section_to_word(dataframe, section, pagebreak, rows_to_bold):
     doc.add_heading(section, 1)
     # Add a table with an extra row for headers
     table = doc.add_table(dataframe.shape[0]+1, dataframe.shape[1])
-    table.style = 'Table Grid' #'Light Shading'
+    table.style = 'Table Grid'
     # Add headers to top row
     for i in range(dataframe.shape[-1]):
         table.cell(0,i).text = dataframe.columns[i]
@@ -302,20 +305,20 @@ query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
 query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
                        ,SUM( SD.[StandardDeviationTrade] * SD.[CounterGoodTrade] ) AS [Std afv]
-                       ,SUM( SD.[CounterGoodTrade] ) AS [Antal enheder]
+                       ,SUM( SD.[CounterGoodTrade] ) AS [Antal poser]
                        FROM [ComScaleDB].[dbo].[StatisticData] AS SD
                        INNER JOIN [dbo].[Statistic] AS S ON SD.[Statistic_ID] = S.[ID]
                        WHERE S.[Order] = '{req_order_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
                        GROUP BY S.[Order],SD.[Nominal],SD.[Tare] )
-                       SELECT CTE.[Total vægt],CTE.[Antal enheder]
-                       ,CASE WHEN CTE.[Antal enheder] = 0 
-                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END AS [Middelvægt]
-                       ,CASE WHEN CTE.[Antal enheder] = 0 
-                       THEN NULL ELSE CTE.[Std afv] / CTE.[Antal enheder] END AS [Standardafvigelse]
-                       ,CASE WHEN CTE.[Antal enheder] = 0 
-                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal enheder] END - CTE.[Nominal] AS [Gns. godvægt per enhed]
-                       ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal enheder] AS [Godvægt total]
-                       ,CTE.[Nominal] AS [Nominel vægt],CTE.[Tare] AS [Taravægt]
+                       SELECT CTE.[Total vægt] / 1000.0 AS [Total vægt kg],CTE.[Antal poser]
+                       ,CASE WHEN CTE.[Antal poser] = 0 
+                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal poser] END AS [Middelvægt g]
+                       ,CASE WHEN CTE.[Antal poser] = 0 
+                       THEN NULL ELSE CTE.[Std afv] / CTE.[Antal poser] END AS [Standardafvigelse g]
+                       ,CASE WHEN CTE.[Antal poser] = 0 
+                       THEN NULL ELSE CTE.[Total vægt] / CTE.[Antal poser] END - CTE.[Nominal] AS [Gns. godvægt per enhed g]
+                       ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal poser] AS [Godvægt total g]
+                       ,CTE.[Nominal] AS [Nominel vægt g],CTE.[Tare] AS [Taravægt g]
                        FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 
@@ -612,7 +615,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True, [-1,0])
+        add_section_to_word(df_temp_total, section_name, False, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -633,7 +636,7 @@ columns_1_dec = ['Kilo']
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
-        dict_mølle_total = {'Kilo': [df_probat_ulg['Kilo'].sum()]}
+        dict_mølle_total = {'Kilo': [df_probat_ulg['Kilo'].sum()],'Probat id':None}
         # Look up column values and string format datecolumn for export
         df_probat_ulg['Receptnavn'] = df_probat_ulg['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
@@ -645,7 +648,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True, [-1,0])
+        add_section_to_word(df_temp_total, section_name, False, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
@@ -666,7 +669,7 @@ columns_1_dec = ['Kilo']
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
-        dict_rister_total = {'Kilo':[df_probat_ulr['Kilo'].sum()]}
+        dict_rister_total = {'Kilo':[df_probat_ulr['Kilo'].sum()],'Probat id':None}
         # Look up column values and string format datecolumn for export       
         df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
@@ -699,7 +702,7 @@ columns_1_dec = ['Kilo']
 if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
     try:
         # Create total for dataframe
-        dict_rister_ind_total = {'Kilo':[df_probat_lr['Kilo'].sum()]}
+        dict_rister_ind_total = {'Kilo':[df_probat_lr['Kilo'].sum()],'Silo':None}
          # Look up column values
         df_probat_lr['Sortnavn'] = df_probat_lr['Sortnummer'].apply(get_nav_item_info, field='Beskrivelse')
         # Create temp dataframe with total
@@ -788,6 +791,9 @@ for col in columns_2_pct:
 
 df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
 df_massebalance.columns = ['Sektion','Værdi']
+df_massebalance['Note'] = [None, None, '[1] - [2]', '[3] / [1]', None, '[2] - [5]',
+                           '[6] / [2]', None, None, None, '[5] - [8] - [9] - [10]',
+                           '[11] / [5]']
 df_massebalance['Bemærkning'] = None
 
 if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
@@ -804,16 +810,21 @@ else: # Write into log if no data is found or section is out of scope
 
 
 # =============================================================================
-# Section 11: Ordrestatistik fra e-vejning
+# Section 11: Ordrestatistik fra e-vejning (poser)
 # =============================================================================
 section_id = 11
 section_name = get_section_name(section_id)
-column_order = ['Total vægt', 'Antal enheder', 'Middelvægt', 'Standardafvigelse',
-                'Gns. godvægt per enhed', 'Godvægt total', 'Nominel vægt', 'Taravægt']
+column_order = ['Total vægt kg', 'Antal poser', 'Middelvægt g', 'Standardafvigelse g',
+                'Gns. godvægt per enhed g', 'Godvægt total g', 'Nominel vægt g', 'Taravægt g']
+columns_2_dec = ['Total vægt kg', 'Antal poser', 'Middelvægt g', 'Standardafvigelse g',
+                'Gns. godvægt per enhed g', 'Godvægt total g', 'Nominel vægt g', 'Taravægt g']
 
 if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_com_statistics = df_com_statistics[column_order]
+        #Column formating
+        for col in columns_2_dec:
+            df_com_statistics[col] = df_com_statistics[col].apply(lambda x: number_format(x, 'dec_2'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_com_statistics, section_name, False)
         add_section_to_word(df_com_statistics, section_name, False, [0])
@@ -877,16 +888,12 @@ section_id = 14
 section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
                 'Pakkedato','Købsordre']
-columns_1_dec = ['Rullelængde']
 
 if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
         df_nav_components['Varenavn'] = df_nav_components['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_nav_components = df_nav_components[column_order]
-        # Data formating
-        for col in columns_1_dec:
-            df_nav_components[col] = df_nav_components[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_nav_components, section_name, False)
         add_section_to_word(df_nav_components, section_name, True, [0])

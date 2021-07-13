@@ -892,7 +892,7 @@ section_name = get_section_name(section_id)
 column_order = ['Registreringstidspunkt','Serienummer','Vægt','Status','Registreret af']
 columns_2_dec = ['Vægt']
 
-if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_ds_vægtkontrol, get_section_visibility(df_sections, section_id)) == 99:
     try:
         df_ds_vægtkontrol = df_ds_vægtkontrol[column_order]
         df_ds_vægtkontrol['Registreringstidspunkt'] = df_ds_vægtkontrol['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')

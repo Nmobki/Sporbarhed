@@ -563,14 +563,16 @@ query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) 
                    WHERE [ORDER_NAME] IN ({q_related_orders})
                    GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME],[DEST_NAME],[SOURCE_NAME]
                    ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
-df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
+if len(q_related_orders) != 0:
+    df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
 # Find related roasting orders from any related grinding orders
 query_probat_lg = f""" SELECT [S_ORDER_NAME]
                        FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
                        WHERE [ORDER_NAME] IN ({q_related_orders})
                        GROUP BY	[S_ORDER_NAME] """
-df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
+if len(q_related_orders) != 0:
+    df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
 
 if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
    for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
@@ -591,7 +593,8 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                         GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
                         ,[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
 						,[DEST_NAME] """
-df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
+if len(q_related_orders) != 0:
+    df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
 # Find green coffee related to orders
 query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
@@ -602,9 +605,8 @@ query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                 WHERE [ORDER_NAME] IN ({q_related_orders})
                 GROUP BY [S_TYPE_CELL],[Source],[S_CONTRACT_NO]
                 	,[S_DELIVERY_NAME],[ORDER_NAME] """
-df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
-
-
+if len(q_related_orders) != 0:
+    df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
 
 # =============================================================================
 # Section 1: Generelt
@@ -679,6 +681,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
         df_temp_total = pd.concat([df_nav_færdigvaretilgang,
                                   pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        df_temp_total.sort_values(by=['Varenummer'], inplace=True)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
@@ -699,7 +702,7 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 4
 section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
-                'Probat id', 'Ordrenummer', 'Kilo']
+                'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
 
 if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
@@ -712,6 +715,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulg, pd.DataFrame.from_dict(data=dict_mølle_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        df_temp_total.sort_values(by=['Receptnummer','Ordrenummer'], inplace=True)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
@@ -732,7 +736,7 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 5
 section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
-                'Probat id', 'Ordrenummer', 'Kilo']
+                'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
 
 if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
@@ -745,6 +749,7 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulr, pd.DataFrame.from_dict(data=dict_rister_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        df_temp_total.sort_values(by=['Receptnummer','Ordrenummer'], inplace=True)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
@@ -764,7 +769,7 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 6
 section_name = get_section_name(section_id)
-column_order = ['Sortnummer','Sortnavn','Silo','Kontraktnummer','Modtagelse',
+column_order = ['Sortnummer','Sortnavn','Kontraktnummer','Modtagelse', 'Silo',
                 'Ordrenummer','Kilo']
 columns_1_dec = ['Kilo']
 
@@ -777,6 +782,7 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_lr, pd.DataFrame.from_dict(data=dict_rister_ind_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        df_temp_total.sort_values(by=['Ordrenummer','Sortnummer','Kilo'], inplace=True)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
@@ -809,6 +815,7 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
+        df_temp_total.sort_values(by=['Varenummer','Debitornummer','Dato'], inplace=True)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))

@@ -164,13 +164,15 @@ req_id = df_request.loc[0, 'Id']
 
 script_name = 'Sporbarhed_færdigkaffe.py'
 timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+orders_top_level = [req_order_no]
+orders_related = []
 
 # =============================================================================
 # Update request that it is initiated and write into log
 # =============================================================================
 cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                   SET [Forespørgsel_igangsat] = getdate()
-                  WHERE [Id] = {req_id}""")
+                  WHERE [Id] = {req_id} """)
 cursor_04.commit()
 log_insert(script_name, f'Request id: {req_id} initiated')
 
@@ -398,8 +400,36 @@ query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
                        BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
 df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
+# Get any related orders identified through Probat
+query_probat_orders = f""" WITH [CTE_ORDERS] AS (
+                       SELECT [ORDER_NAME] AS [Ordrenummer],[S_ORDER_NAME] AS [Relateret ordre]
+                       ,'Probat PG' AS [Kilde]
+                       FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
+                       GROUP BY	[ORDER_NAME],[S_ORDER_NAME]
+                       UNION ALL
+                       SELECT [ORDER_NAME],[S_ORDER_NAME],'Probat PB'
+                       FROM [dbo].[PRO_EXP_ORDER_SEND_PB]
+                       GROUP BY	[ORDER_NAME],[S_ORDER_NAME] )
+                       SELECT [Ordrenummer],[Relateret ordre],[Kilde]
+                       FROM [CTE_ORDERS]
+                       WHERE [Relateret ordre] IN (SELECT [Relateret ordre] 
+                       FROM [CTE_ORDERS] WHERE [Ordrenummer] = '{req_order_no}') """
+df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
 
-req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES NÅR NAV UDVIKLING ER PÅ PLADS
+# Get lists of orders and related orders (if any) from Probat
+probat_orders_top = df_probat_orders['Ordrenummer'].unique().tolist()
+probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
+
+# If order doesn't exist in list, append:
+for order in probat_orders_top:
+    if order not in  orders_top_level:
+        orders_top_level.append(order)
+        
+for order in probat_orders_related:
+    if order not in orders_related:
+        orders_related.append(order)
+
+req_orders_total = string_to_sql(orders_top_level)
 
 # Recursive query to find all relevant produced orders related to the requested order
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
@@ -407,7 +437,7 @@ req_orders_total = string_to_sql([req_order_no,'036720']) # **** SKAL ÆNDRES N�
 # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
 query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                              WHERE [Order No_] IN({req_orders_total})
+                              WHERE [Order No_] IN ({req_orders_total})
                               AND [Entry Type] = 6
                               UNION ALL
                               SELECT ILE_O.[Lot No_]
@@ -522,9 +552,7 @@ query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
                         GROUP BY ILE.[Item No_] ,I.[Description],I.[Base Unit of Measure] """
 df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
 
-
-# OBS!!! Denne liste skal dannes ud fra NAV forespørgsel når Jira er på plads!!!!
-related_orders = string_to_sql(['041367','041344','041234'])
+q_related_orders = string_to_sql(orders_related)
 
 # Related grinding orders - information for batches out of grinder to include rework
 query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
@@ -532,7 +560,7 @@ query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) 
                    ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
                    ,[DEST_NAME] AS [Silo],SUM([WEIGHT]) / 1000.0 AS [Kilo]
                    FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                   WHERE [ORDER_NAME] IN ({related_orders})
+                   WHERE [ORDER_NAME] IN ({q_related_orders})
                    GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME],[DEST_NAME],[SOURCE_NAME]
                    ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
 df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
@@ -540,11 +568,17 @@ df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 # Find related roasting orders from any related grinding orders
 query_probat_lg = f""" SELECT [S_ORDER_NAME]
                        FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
-                       WHERE [ORDER_NAME] IN ({related_orders})
+                       WHERE [ORDER_NAME] IN ({q_related_orders})
                        GROUP BY	[S_ORDER_NAME] """
+df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
+
 if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
-    df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
-    related_orders = related_orders + ',' + string_to_sql(df_probat_lg['S_ORDER_NAME'].unique().tolist())
+   for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
+       if order not in orders_related:
+           orders_related.append(order)
+
+    
+q_related_orders = string_to_sql(orders_related)
 
 # Find information for identified roasting orders, batches out of roaster
 query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
@@ -553,7 +587,7 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                     	,[ORDER_NAME] AS [Ordrenummer] ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
 						,[DEST_NAME] AS [Silo]
                         FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
-                        WHERE [ORDER_NAME] IN ({related_orders})
+                        WHERE [ORDER_NAME] IN ({q_related_orders})
                         GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
                         ,[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
 						,[DEST_NAME] """
@@ -565,7 +599,7 @@ query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                 ,[S_DELIVERY_NAME] AS [Modtagelse],[ORDER_NAME] AS [Ordrenummer]
             	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
                 FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                WHERE [ORDER_NAME] IN ({related_orders})
+                WHERE [ORDER_NAME] IN ({q_related_orders})
                 GROUP BY [S_TYPE_CELL],[Source],[S_CONTRACT_NO]
                 	,[S_DELIVERY_NAME],[ORDER_NAME] """
 df_probat_lr = pd.read_sql(query_probat_lr, con_probat)

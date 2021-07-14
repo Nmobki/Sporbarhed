@@ -134,7 +134,7 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 # Read data from request
 # =============================================================================
-query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager] 
+query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager]
                     ,[Referencenummer] AS [Ordrenummer],[Note_forespørgsel] 
                     FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL
@@ -415,7 +415,7 @@ probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
 for order in probat_orders_top:
     if order not in  orders_top_level:
         orders_top_level.append(order)
-        
+
 for order in probat_orders_related:
     if order not in orders_related:
         orders_related.append(order)
@@ -566,11 +566,11 @@ if len(q_related_orders) != 0:
     df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
 
 if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
-   for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
-       if order not in orders_related:
-           orders_related.append(order)
+    for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
+        if order not in orders_related:
+            orders_related.append(order)
 
-    
+
 q_related_orders = string_to_sql(orders_related)
 
 # Find information for identified roasting orders, batches out of roaster
@@ -604,12 +604,12 @@ if len(q_related_orders) != 0:
 # =============================================================================
 section_id = 1
 section_name = get_section_name(section_id)
-column_order = ['Varenummer', 'Varenavn', 'Basisenhed','Stregkode', 'Receptnummer', 
+column_order = ['Varenummer', 'Varenavn', 'Basisenhed','Stregkode', 'Receptnummer',
                 'Pakkelinje', 'Produktionsdato', 'Pakketidspunkt', 'Ordrenummer',
-                'Prod.ordre status', 'Smagning status', 'Opstartssilo', 
-                'Igangsat af', 'Taravægt', 'Nitrogen', 'Henstandsprøver', 
-                'Referenceprøver', 'Kontrolprøver', 'Bemærkning opstart', 
-                'Lotnumre produceret', 'Slat forbrug','Slat afgang', 
+                'Prod.ordre status', 'Smagning status', 'Opstartssilo',
+                'Igangsat af', 'Taravægt', 'Nitrogen', 'Henstandsprøver',
+                'Referenceprøver', 'Kontrolprøver', 'Bemærkning opstart',
+                'Lotnumre produceret', 'Slat forbrug','Slat afgang',
                 'Rework forbrug', 'Rework afgang']
 columns_1_dec = ['Slat forbrug', 'Slat afgang', 'Rework forbrug', 'Rework afgang',
                  'Taravægt']
@@ -617,7 +617,7 @@ columns_0_dec = ['Henstandsprøver','Referenceprøver','Kontrolprøver']
 columns_0_pct = ['Nitrogen']
 
 if get_section_status_code(df_nav_generelt) == 99:
-    try: 
+    try:
         df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
         df_nav_generelt['Pakketidspunkt'] = df_results_generelt['Pakketidspunkt'].iloc[0]
         df_nav_generelt['Ordrenummer'] = req_order_no
@@ -631,15 +631,15 @@ if get_section_status_code(df_nav_generelt) == 99:
         df_nav_generelt['Referenceprøver'] = df_results_generelt['Referenceprøver'].iloc[0]
         df_nav_generelt['Kontrolprøver'] = df_results_generelt['Kontrolprøver'].iloc[0]
         df_nav_generelt['Bemærkning opstart'] = df_results_generelt['Bemærkning opstart'].iloc[0]
-        #Apply column formating
+        # Apply column formating
         for col in columns_1_dec:
             df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'dec_1'))
         for col in columns_0_dec:
             df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'dec_0'))
         for col in columns_0_pct:
             df_nav_generelt[col] = df_nav_generelt[col].apply(lambda x: number_format(x, 'pct_0'))
-        df_nav_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')        
-       
+        df_nav_generelt['Produktionsdato'] = df_nav_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')
+        # Transpose dataframe
         df_nav_generelt = df_nav_generelt[column_order].transpose()
         df_nav_generelt = df_nav_generelt.reset_index()
         df_nav_generelt.columns = ['Sektion','Værdi']
@@ -752,7 +752,7 @@ if get_section_status_code(df_probat_ulr) == 99:
     try:
         # Create total for dataframe
         dict_rister_total = {'Kilo':[df_probat_ulr['Kilo'].sum()],'Probat id':None}
-        # Look up column values and string format datecolumn for export       
+        # Look up column values and string format datecolumn for export
         df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
         # Create temp dataframe with total
@@ -817,7 +817,7 @@ if get_section_status_code(df_nav_debitorer) == 99:
         # Create total for dataframe
         dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
                               'Kilo':[df_nav_debitorer['Kilo'].sum()]}
-         # Look up column values and string format datecolumn for export     
+         # Look up column values and string format datecolumn for export
         df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])

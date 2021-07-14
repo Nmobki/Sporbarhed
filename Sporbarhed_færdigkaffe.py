@@ -14,10 +14,6 @@ import openpyxl
 # Define functions
 # =============================================================================
 
-# Get visibility for section from query
-def get_section_visibility(dataframe, section):
-    return dataframe['Sektion_synlig'].iloc[section]
-
 # Get section name for section from query
 def get_section_name(section):
     x = df_sections['Sektion navn'].iloc[section-1]
@@ -27,9 +23,7 @@ def get_section_name(section):
         return x
 
 # Find statuscode for section log
-def get_section_status_code(dataframe, visibility):
-    if visibility == 0:
-        return 3 # Not active for selected reporting type
+def get_section_status_code(dataframe):
     if len(dataframe) == 0:
         return 1 # Empty dataframe
     else:
@@ -140,9 +134,8 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 # Read data from request
 # =============================================================================
-query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype] ,[Rapporttype]
-                    ,[Rapport_modtager] 
-                    ,[Referencenummer] AS [Ordrenummer] ,[Note_forespørgsel] 
+query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager] 
+                    ,[Referencenummer] AS [Ordrenummer],[Note_forespørgsel] 
                     FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL
                     AND [Referencetype] = 0 AND [Forespørgselstype] = 0 """
@@ -156,7 +149,6 @@ if len(df_request) == 0:
 # Set request variables
 # =============================================================================
 req_type = df_request.loc[0, 'Forespørgselstype']
-req_report_type = df_request.loc[0, 'Rapporttype']
 req_order_no = df_request.loc[0, 'Ordrenummer']
 req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
@@ -205,12 +197,11 @@ excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
 # =============================================================================
 # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
 # =============================================================================
-query_ds_reporttypes =  f"""SELECT SRS.[Sektion] ,SRS.[Sektion_synlig] ,SS.[Beskrivelse] AS [Sektion navn]
+query_ds_reporttypes =  f"""SELECT SRS.[Sektion], SS.[Beskrivelse] AS [Sektion navn]
                        FROM [trc].[Sporbarhed_rapport_sektion] AS SRS
 					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
 					   ON SRS.[Sektion] = SS.[Id]
-                       WHERE [Rapporttype] = {req_type} 
-                       AND [Forespørgselstype] = {req_report_type}"""
+                       WHERE [Forespørgselstype] = {req_type} """
 df_sections = pd.read_sql(query_ds_reporttypes, con_04)
 
 # =============================================================================
@@ -625,7 +616,7 @@ columns_1_dec = ['Slat forbrug', 'Slat afgang', 'Rework forbrug', 'Rework afgang
 columns_0_dec = ['Henstandsprøver','Referenceprøver','Kontrolprøver']
 columns_0_pct = ['Nitrogen']
 
-if get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_generelt) == 99:
     try: 
         df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
         df_nav_generelt['Pakketidspunkt'] = df_results_generelt['Pakketidspunkt'].iloc[0]
@@ -660,7 +651,7 @@ if get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, 
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_generelt))
 
 # =============================================================================
 # Section 2: Relaterede ordrer NAV --> Probat
@@ -669,7 +660,7 @@ section_id = 2
 section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Relateret ordre','Kilde']
 
-if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_færdigvaretilgang) == 99:
     try:
         df_probat_orders = df_probat_orders[column_order]
         df_probat_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
@@ -681,7 +672,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_probat_orders, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_probat_orders))
 
 # =============================================================================
 # Section 3: Færdigvaretilgang
@@ -691,7 +682,7 @@ section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
 columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
 
-if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_færdigvaretilgang) == 99:
     try:
         # Create total for dataframe
         dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
@@ -713,7 +704,7 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 # =============================================================================
 # Section 4: Mølleordrer
@@ -724,7 +715,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
                 'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
 
-if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_probat_ulg) == 99:
     try:
         # Create total for dataframe
         dict_mølle_total = {'Kilo': [df_probat_ulg['Kilo'].sum()],'Probat id':None}
@@ -746,7 +737,7 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 # =============================================================================
 # Section 5: Risteordrer
@@ -757,7 +748,7 @@ column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
                 'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
 
-if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_probat_ulr) == 99:
     try:
         # Create total for dataframe
         dict_rister_total = {'Kilo':[df_probat_ulr['Kilo'].sum()],'Probat id':None}
@@ -779,7 +770,7 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 # =============================================================================
 # Section 6: Råkaffeforbrug
@@ -790,7 +781,7 @@ column_order = ['Sortnummer','Sortnavn','Kontraktnummer','Modtagelse', 'Silo',
                 'Ordrenummer','Kilo']
 columns_1_dec = ['Kilo']
 
-if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_probat_lr) == 99:
     try:
         # Create total for dataframe
         dict_rister_ind_total = {'Kilo':[df_probat_lr['Kilo'].sum()],'Silo':None}
@@ -811,7 +802,7 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 # =============================================================================
 # Section 7: Debitorer
@@ -821,7 +812,7 @@ section_name = get_section_name(section_id)
 column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
 columns_1_dec = ['Enheder','Kilo']
 
-if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_debitorer) == 99:
     try:
         # Create total for dataframe
         dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
@@ -843,7 +834,7 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 # =============================================================================
 # Section 8: Massebalance
@@ -887,7 +878,7 @@ df_massebalance['Note'] = [None, None, '[1] - [2]', '[3] / [1]', None, '[2] - [5
                            '[11] / [5]']
 df_massebalance['Bemærkning'] = None
 
-if get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_massebalance) == 99:
     try:
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_massebalance, section_name, True)
@@ -897,7 +888,7 @@ if get_section_status_code(df_massebalance, get_section_visibility(df_sections, 
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_massebalance, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_massebalance))
 
 # =============================================================================
 # Section 10: Vægtkontrol
@@ -907,7 +898,7 @@ section_name = get_section_name(section_id)
 column_order = ['Registreringstidspunkt','Serienummer','Vægt','Status','Registreret af']
 columns_2_dec = ['Vægt']
 
-if get_section_status_code(df_ds_vægtkontrol, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_ds_vægtkontrol) == 99:
     try:
         df_ds_vægtkontrol = df_ds_vægtkontrol[column_order]
         df_ds_vægtkontrol['Registreringstidspunkt'] = df_ds_vægtkontrol['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
@@ -922,7 +913,7 @@ if get_section_status_code(df_ds_vægtkontrol, get_section_visibility(df_section
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_ds_vægtkontrol, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_ds_vægtkontrol))
 
 # =============================================================================
 # Section 11: Ordrestatistik fra e-vejning (poser)
@@ -934,7 +925,7 @@ column_order = ['Total vægt kg', 'Antal poser', 'Middelvægt g', 'Standardafvig
 columns_2_dec = ['Total vægt kg', 'Antal poser', 'Middelvægt g', 'Standardafvigelse g',
                 'Gns. godvægt per enhed g', 'Godvægt total g', 'Nominel vægt g', 'Taravægt g']
 
-if get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_com_statistics) == 99:
     try:
         df_com_statistics = df_com_statistics[column_order]
         #Column formating
@@ -952,7 +943,7 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_com_statistics))
 
 # =============================================================================
 # Section 12: Karakterer
@@ -961,7 +952,7 @@ section_id = 12
 section_name = get_section_name(section_id)
 columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
 
-if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_karakterer) == 99:
     try:
         # Column formating
         df_karakterer['Dato'] = df_karakterer['Dato'].dt.strftime('%d-%m-%Y')
@@ -975,7 +966,7 @@ if get_section_status_code(df_karakterer, get_section_visibility(df_sections, se
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_karakterer))
 
 # =============================================================================
 # Section 13: Komponentforbrug
@@ -985,7 +976,7 @@ section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Basisenhed','Antal']
 columns_1_dec = ['Antal']
 
-if get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_consumption) == 99:
     try:
         df_nav_consumption = df_nav_consumption[column_order]
         # Data formating
@@ -999,7 +990,7 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_consumption))
 
 # =============================================================================
 # Section 14: Anvendt primæremballage
@@ -1009,7 +1000,7 @@ section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
                 'Pakkedato','Købsordre']
 
-if get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_components) == 99:
     try:
         df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
         df_nav_components['Varenavn'] = df_nav_components['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
@@ -1022,7 +1013,7 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_components))
 
 # =============================================================================
 # Section 15: Lotnumre
@@ -1036,7 +1027,7 @@ columns_0_dec = ['Antal poser','Antal leakers']
 columns_1_dec = ['Kilo']
 columns_2_pct = ['Leakers pct']
 
-if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_nav_lotno) == 99:
     try:
         df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
                                 right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
@@ -1063,7 +1054,7 @@ if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, sec
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_nav_lotno))
 
 # =============================================================================
 # Section 16: Reference- og henstandsprøver
@@ -1074,7 +1065,7 @@ column_order = ['Id', 'Registreringstidspunkt', 'Operatør', 'Silo', 'Prøvetype
                 'Bemærkning', 'Smagning status', 'Antal prøver']
 df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
 
-if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_temp) == 99:
     try:
         df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_temp = df_temp[column_order]
@@ -1086,7 +1077,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp))
 
 # =============================================================================
 # Section 17: Udtagne kontrolprøver
@@ -1100,7 +1091,7 @@ columns_2_dec = ['Vægt']
 columns_0_pct = ['Ilt']
 df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
 
-if get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_temp) == 99:
     try:
         df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_temp = df_temp[column_order]
@@ -1118,7 +1109,7 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_temp))
 
 # =============================================================================
 # Section 18: Sektionslog
@@ -1127,7 +1118,7 @@ section_id = 18
 df_section_log = pd.read_sql(query_ds_section_log, con_04)
 section_name = get_section_name(section_id)
 
-if get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)) == 99:
+if get_section_status_code(df_section_log) == 99:
     try:
         df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
         # Write results to Word and Excel
@@ -1138,7 +1129,7 @@ if get_section_status_code(df_section_log, get_section_visibility(df_sections, s
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_section_log, get_section_visibility(df_sections, section_id)))
+    section_log_insert(section_id, get_section_status_code(df_section_log))
 
 
 #Save files

@@ -662,6 +662,26 @@ if get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, 
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_generelt, get_section_visibility(df_sections, section_id)))
 
+# =============================================================================
+# Section 2: Relaterede ordrer NAV --> Probat
+# =============================================================================
+section_id = 2
+section_name = get_section_name(section_id)
+column_order = ['Ordrenummer','Relateret ordre','Kilde']
+
+if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_sections, section_id)) == 99:
+    try:
+        df_probat_orders = df_probat_orders[column_order]
+        df_probat_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_probat_orders, section_name, False)
+        add_section_to_word(df_probat_orders, section_name, True, [0])
+        # Write status into log
+        section_log_insert(section_id, 0)
+    except: # Insert error into log
+        section_log_insert(section_id, 2)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(section_id, get_section_status_code(df_probat_orders, get_section_visibility(df_sections, section_id)))
 
 # =============================================================================
 # Section 3: Færdigvaretilgang
@@ -694,7 +714,6 @@ if get_section_status_code(df_nav_færdigvaretilgang, get_section_visibility(df_
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 4: Mølleordrer
@@ -729,7 +748,6 @@ if get_section_status_code(df_probat_ulg, get_section_visibility(df_sections, se
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 5: Risteordrer
 # =============================================================================
@@ -763,7 +781,6 @@ if get_section_status_code(df_probat_ulr, get_section_visibility(df_sections, se
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 6: Råkaffeforbrug
 # =============================================================================
@@ -796,7 +813,6 @@ if get_section_status_code(df_probat_lr, get_section_visibility(df_sections, sec
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 7: Debitorer
 # =============================================================================
@@ -828,7 +844,6 @@ if get_section_status_code(df_nav_debitorer, get_section_visibility(df_sections,
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 8: Massebalance
@@ -925,6 +940,10 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
         #Column formating
         for col in columns_2_dec:
             df_com_statistics[col] = df_com_statistics[col].apply(lambda x: number_format(x, 'dec_2'))
+        # Transpose dataframe
+        df_com_statistics = df_com_statistics.transpose()
+        df_com_statistics = df_com_statistics.reset_index()
+        df_com_statistics.columns = ['Sektion','Værdi']
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_com_statistics, section_name, False)
         add_section_to_word(df_com_statistics, section_name, False, [0])
@@ -935,26 +954,28 @@ if get_section_status_code(df_com_statistics, get_section_visibility(df_sections
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_com_statistics, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 12: Karakterer
 # =============================================================================
 section_id = 12
 section_name = get_section_name(section_id)
+columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
 
 if get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)) == 99:
     try:
+        # Column formating
         df_karakterer['Dato'] = df_karakterer['Dato'].dt.strftime('%d-%m-%Y')
+        for col in columns_1_dec:
+            df_karakterer[col] = df_karakterer[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_karakterer, section_name, False)
-        add_section_to_word(df_karakterer, section_name, False, [0])
+        add_section_to_word(df_karakterer, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_karakterer, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 13: Komponentforbrug
@@ -980,7 +1001,6 @@ if get_section_status_code(df_nav_consumption, get_section_visibility(df_section
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_consumption, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 14: Anvendt primæremballage
 # =============================================================================
@@ -1003,7 +1023,6 @@ if get_section_status_code(df_nav_components, get_section_visibility(df_sections
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_components, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 15: Lotnumre
@@ -1046,7 +1065,6 @@ if get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, sec
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_lotno, get_section_visibility(df_sections, section_id)))
 
-
 # =============================================================================
 # Section 16: Reference- og henstandsprøver
 # =============================================================================
@@ -1069,7 +1087,6 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 17: Udtagne kontrolprøver
@@ -1102,7 +1119,6 @@ if get_section_status_code(df_temp, get_section_visibility(df_sections, section_
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp, get_section_visibility(df_sections, section_id)))
-
 
 # =============================================================================
 # Section 18: Sektionslog

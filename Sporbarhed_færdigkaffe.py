@@ -178,7 +178,7 @@ log_insert(script_name, f'Request id: {req_id} initiated')
 # =============================================================================
 # Variables for files generated
 # =============================================================================
-filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests' # Ændre ifbm. drift
+filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
 file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
 
 doc = docx.Document()
@@ -1180,14 +1180,12 @@ if get_section_status_code(df_section_log) == 99:
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_section_log))
 
-
 #Save files
 excel_writer.save()
 log_insert(script_name, f'Excel file {file_name} created')
 
 doc.save(path_file_doc)
 log_insert(script_name, f'Word document {file_name} created')
-# *** TODO SAVE PDF FILE
 
 # =============================================================================
 # Write into email log
@@ -1198,7 +1196,7 @@ dict_email_log = {'Filsti': filepath
                   ,'Emne': f'Anmodet rapport for ordre {req_order_no}'
                   ,'Forespørgsels_id': req_id
                   ,'Note':req_note}
-# pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
 log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
 # =============================================================================

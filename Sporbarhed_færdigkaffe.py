@@ -62,6 +62,13 @@ def number_format(value, number_type):
     except:
         return value
 
+def zero_division(nominator, denominator, zero_return):
+    dict = {'None':None,'Zero':0}
+    if denominator == 0:
+        return dict[zero_return]
+    else:
+        return nominator / denominator
+
 # Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
 def log_insert(event, note):
     dict_log = {'Note': note
@@ -492,6 +499,40 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                       GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
+# Query to show relation between requested order and any orders which have used it as components
+query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                              WHERE [Order No_] IN ({req_orders_total})
+                              AND [Entry Type] = 6
+                              UNION ALL
+                              SELECT ILE_O.[Lot No_]
+                              FROM [LOT_ORG]
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
+                                  ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
+                                  AND [ILE_C].[Entry Type] IN (5,8)
+                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
+                            	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
+                                  AND ILE_O.[Entry Type] IN (6,9) )
+                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                              WHERE [Entry Type] IN (5,8)
+                              GROUP BY [Lot No_], [Document No_] )
+                              ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                              WHERE [Entry Type] IN (6,9)
+                              GROUP BY [Lot No_], [Document No_] )
+                              SELECT DO.[Document No_] AS [Ordrenummer]
+                              ,DC.[Document No_] AS [Relateret ordre]
+                              ,'Navision forbrug' AS [Kilde]
+                              FROM [LOT_ORG] AS L
+                              INNER JOIN [DOC_OUT] AS DO
+                                  ON L.[Lot No_] = DO.[Lot No_]
+                              LEFT JOIN [DOC_CONS] AS DC
+                                  ON L.[Lot No_] = DC.[Lot No_]
+                              WHERE DC.[Document No_] IS NOT NULL
+                              GROUP BY DO.[Document No_] ,DC.[Document No_] """
+df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
+
 # Lotnumber information for the originally requested order
 query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
             	  ,LI.[Certificate Number] AS [Pallenummer]
@@ -554,6 +595,8 @@ query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) 
                    WHERE [ORDER_NAME] IN ({q_related_orders})
                    GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME],[DEST_NAME],[SOURCE_NAME]
                    ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
+df_probat_ulg = pd.DataFrame(columns=['Dato','Probat id','Mølle','Ordrenummer',
+                                      'Receptnummer','Silo','Kilo'])
 if len(q_related_orders) != 0:
     df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
@@ -562,6 +605,7 @@ query_probat_lg = f""" SELECT [S_ORDER_NAME]
                        FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
                        WHERE [ORDER_NAME] IN ({q_related_orders})
                        GROUP BY	[S_ORDER_NAME] """
+df_probat_lg = pd.DataFrame(columns=['S_ORDER_NAME'])
 if len(q_related_orders) != 0:
     df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
 
@@ -569,7 +613,6 @@ if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
     for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
         if order not in orders_related:
             orders_related.append(order)
-
 
 q_related_orders = string_to_sql(orders_related)
 
@@ -584,6 +627,8 @@ query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                         GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
                         ,[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
 						,[DEST_NAME] """
+df_probat_ulr = pd.DataFrame(columns=['Receptnummer','Dato','Rister','Probat id',
+                                      'Ordrenummer','Kilo','Silo'])
 if len(q_related_orders) != 0:
     df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
@@ -596,6 +641,8 @@ query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                 WHERE [ORDER_NAME] IN ({q_related_orders})
                 GROUP BY [S_TYPE_CELL],[Source],[S_CONTRACT_NO]
                 	,[S_DELIVERY_NAME],[ORDER_NAME] """
+df_probat_lr = pd.DataFrame(columns=['Sortnummer','Silo','Kontraktnummer',
+                                     'Modtagelse','Ordrenummer','Kilo'])
 if len(q_related_orders) != 0:
     df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
 
@@ -660,19 +707,21 @@ section_id = 2
 section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Relateret ordre','Kilde']
 
-if get_section_status_code(df_nav_færdigvaretilgang) == 99:
+df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
+
+if get_section_status_code(df_temp_orders) == 99:
     try:
-        df_probat_orders = df_probat_orders[column_order]
-        df_probat_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
+        df_temp_orders = df_temp_orders[column_order]
+        df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
         # Write results to Word and Excel
-        insert_dataframe_into_excel (df_probat_orders, section_name, False)
-        add_section_to_word(df_probat_orders, section_name, True, [0])
+        insert_dataframe_into_excel (df_temp_orders, section_name, False)
+        add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except: # Insert error into log
         section_log_insert(section_id, 2)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_probat_orders))
+    section_log_insert(section_id, get_section_status_code(df_temp_orders))
 
 # =============================================================================
 # Section 3: Færdigvaretilgang
@@ -858,13 +907,13 @@ dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[11] Difference': None,
                      '[12] Difference pct': None}
 dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
-dict_massebalance['[4] Difference pct'] = dict_massebalance['[3] Difference'] / dict_massebalance['[1] Råkaffe']
+dict_massebalance['[4] Difference pct'] = zero_division(dict_massebalance['[3] Difference'], dict_massebalance['[1] Råkaffe'], 'Zero')
 dict_massebalance['[6] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[5] Færdigvaretilgang']
-dict_massebalance['[7] Difference pct'] = dict_massebalance['[6] Difference'] / dict_massebalance['[2] Ristet kaffe']
+dict_massebalance['[7] Difference pct'] = zero_division(dict_massebalance['[6] Difference'], dict_massebalance['[2] Ristet kaffe'] ,'Zero')
 dict_massebalance['[11] Difference'] = ( dict_massebalance['[5] Færdigvaretilgang']
     - dict_massebalance['[8] Salg'] - dict_massebalance['[9] Regulering & ompak']
     - dict_massebalance['[10] Restlager'] )
-dict_massebalance['[12] Difference pct'] = dict_massebalance['[11] Difference'] / dict_massebalance['[5] Færdigvaretilgang']
+dict_massebalance['[12] Difference pct'] = zero_division(dict_massebalance['[11] Difference'], dict_massebalance['[5] Færdigvaretilgang'], 'Zero')
 #Number formating
 for col in columns_1_dec:
     dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')
@@ -1033,7 +1082,7 @@ if get_section_status_code(df_nav_lotno) == 99:
                                 right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
         df_nav_lotno['Antal leakers'].fillna(value=0, inplace=True)
         df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
-        df_nav_lotno['Leakers pct'] = df_nav_lotno['Antal leakers'] / df_nav_lotno['Antal poser']
+        df_nav_lotno['Leakers pct'] = zero_division(df_nav_lotno['Antal leakers'], df_nav_lotno['Antal poser'] ,'Zero')
         df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
         df_nav_lotno['Produktionstidspunkt'] = df_nav_lotno['Produktionstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
         df_nav_lotno = df_nav_lotno[column_order]

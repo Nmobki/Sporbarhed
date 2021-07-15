@@ -907,13 +907,13 @@ dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                      '[11] Difference': None,
                      '[12] Difference pct': None}
 dict_massebalance['[3] Difference'] = dict_massebalance['[1] Råkaffe'] - dict_massebalance['[2] Ristet kaffe']
-dict_massebalance['[4] Difference pct'] = zero_division(dict_massebalance['[3] Difference'], dict_massebalance['[1] Råkaffe'], 'Zero')
+dict_massebalance['[4] Difference pct'] = zero_division(dict_massebalance['[3] Difference'], dict_massebalance['[1] Råkaffe'], 'None')
 dict_massebalance['[6] Difference'] = dict_massebalance['[2] Ristet kaffe'] - dict_massebalance['[5] Færdigvaretilgang']
-dict_massebalance['[7] Difference pct'] = zero_division(dict_massebalance['[6] Difference'], dict_massebalance['[2] Ristet kaffe'] ,'Zero')
+dict_massebalance['[7] Difference pct'] = zero_division(dict_massebalance['[6] Difference'], dict_massebalance['[2] Ristet kaffe'] ,'None')
 dict_massebalance['[11] Difference'] = ( dict_massebalance['[5] Færdigvaretilgang']
     - dict_massebalance['[8] Salg'] - dict_massebalance['[9] Regulering & ompak']
     - dict_massebalance['[10] Restlager'] )
-dict_massebalance['[12] Difference pct'] = zero_division(dict_massebalance['[11] Difference'], dict_massebalance['[5] Færdigvaretilgang'], 'Zero')
+dict_massebalance['[12] Difference pct'] = zero_division(dict_massebalance['[11] Difference'], dict_massebalance['[5] Færdigvaretilgang'], 'None')
 #Number formating
 for col in columns_1_dec:
     dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')

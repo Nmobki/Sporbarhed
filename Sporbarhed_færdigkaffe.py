@@ -1075,14 +1075,7 @@ column_order = ['Lotnummer', 'Pallenummer', 'Produktionstidspunkt', 'Kontrollere
 columns_0_dec = ['Antal poser','Antal leakers']
 columns_1_dec = ['Kilo']
 columns_2_pct = ['Leakers pct']
-df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
-                        right_on = 'Lotnummer', how='left', suffixes=('', '_y'))
-df_nav_lotno['Antal leakers'].fillna(value=0, inplace=True)
-df_nav_lotno['Resultat af kontrol'].fillna(value='Ej kontrolleret', inplace=True)
-df_nav_lotno['Leakers pct'] = df_nav_lotno.apply(lambda x: zero_division(x['Antal leakers'], x['Antal poser'], 'Zero'), axis=1)
-df_nav_lotno['Pallenummer'] = df_nav_lotno['Pallenummer_y'].fillna(df_nav_lotno['Pallenummer'])
-df_nav_lotno['Produktionstidspunkt'] = df_nav_lotno['Produktionstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
-df_nav_lotno = df_nav_lotno[column_order]
+
 if get_section_status_code(df_nav_lotno) == 99:
     try:
         df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',

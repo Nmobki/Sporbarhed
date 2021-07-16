@@ -32,8 +32,8 @@ def get_section_status_code(dataframe):
 # Write into section log
 def section_log_insert(section, statuscode, errorcode=None):
     df = pd.DataFrame(data={'Forespørgsels_id':req_id,
-                            'Sektion':section, 
-                            'Statuskode':statuscode, 
+                            'Sektion':section,
+                            'Statuskode':statuscode,
                             'Fejlkode_script':errorcode}
                       , index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
@@ -53,13 +53,13 @@ def number_format(value, number_type):
     try:
         if number_type == 'dec_2':
             return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-        if number_type == 'dec_1':
+        elif number_type == 'dec_1':
             return f'{round(value,1):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-        if number_type == 'dec_0':
+        elif number_type == 'dec_0':
             return f'{int(round(value,0)):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
-        if number_type == 'pct_2':
+        elif number_type == 'pct_2':
             return f'{round(value,4):.2%}'.replace(',', ';').replace('.', ',').replace(';', '.')
-        if number_type == 'pct_0':
+        elif number_type == 'pct_0':
             return f'{round(value,2):.0%}'.replace(',', ';').replace('.', ',').replace(';', '.')
         else:
             return value

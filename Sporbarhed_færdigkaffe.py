@@ -405,7 +405,7 @@ df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 # Get any related orders identified through Probat
 query_probat_orders = f""" WITH [CTE_ORDERS] AS (
-                       SELECT [ORDER_NAME] AS [Relateret ordre],[S_ORDER_NAME] AS [Ordrenummer]
+                       SELECT [ORDER_NAME] AS [Ordrenummer],[S_ORDER_NAME] AS [Relateret ordre]
                        ,'Probat PG' AS [Kilde]
                        FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
                        GROUP BY	[ORDER_NAME],[S_ORDER_NAME]
@@ -526,8 +526,8 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (6,9)
                               GROUP BY [Lot No_], [Document No_] )
-                              SELECT DO.[Document No_] AS [Ordrenummer]
-                              ,DC.[Document No_] AS [Relateret ordre]
+                              SELECT DO.[Document No_] AS [Relateret ordre]
+                              ,DC.[Document No_] AS [Ordrenummer]
                               ,'Navision forbrug' AS [Kilde]
                               FROM [LOT_ORG] AS L
                               INNER JOIN [DOC_OUT] AS DO

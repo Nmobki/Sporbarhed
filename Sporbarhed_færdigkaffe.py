@@ -310,7 +310,7 @@ df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
 # Query is only executed at the end of the script
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
-                       ,SL.[Registreringstidspunkt], SL.[Fejlkode_script] AS [Fejlkode script]
+                       ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
                        FROM [trc].[Sporbarhed_sektion_log] AS SL
                        INNER JOIN [trc].[Sporbarhed_sektion] AS S
                          	ON SL.[Sektion] = S.[Id]

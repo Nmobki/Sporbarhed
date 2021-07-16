@@ -30,8 +30,12 @@ def get_section_status_code(dataframe):
         return 99 # Continue
 
 # Write into section log
-def section_log_insert(section, statuscode):
-    df = pd.DataFrame(data={'Forespørgsels_id':req_id,'Sektion':section, 'Statuskode':statuscode}, index=[0])
+def section_log_insert(section, statuscode, errorcode=None):
+    df = pd.DataFrame(data={'Forespørgsels_id':req_id,
+                            'Sektion':section, 
+                            'Statuskode':statuscode, 
+                            'Fejlkode_script':errorcode}
+                      , index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
@@ -306,7 +310,7 @@ df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
 # Query is only executed at the end of the script
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
-                       ,SL.[Registreringstidspunkt]
+                       ,SL.[Registreringstidspunkt], SL.[Fejlkode_script] AS [Fejlkode script]
                        FROM [trc].[Sporbarhed_sektion_log] AS SL
                        INNER JOIN [trc].[Sporbarhed_sektion] AS S
                          	ON SL.[Sektion] = S.[Id]
@@ -695,8 +699,8 @@ if get_section_status_code(df_nav_generelt) == 99:
         add_section_to_word(df_nav_generelt, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_generelt))
 
@@ -718,8 +722,8 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_orders))
 
@@ -750,8 +754,8 @@ if get_section_status_code(df_nav_færdigvaretilgang) == 99:
         add_section_to_word(df_temp_total, section_name, False, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
@@ -783,8 +787,8 @@ if get_section_status_code(df_probat_ulg) == 99:
         add_section_to_word(df_temp_total, section_name, False, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
@@ -816,8 +820,8 @@ if get_section_status_code(df_probat_ulr) == 99:
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
@@ -848,8 +852,8 @@ if get_section_status_code(df_probat_lr) == 99:
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
@@ -880,8 +884,8 @@ if get_section_status_code(df_nav_debitorer) == 99:
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
@@ -934,8 +938,8 @@ if get_section_status_code(df_massebalance) == 99:
         add_section_to_word(df_massebalance, section_name, True, [0,3,4,6,7,11,12])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_massebalance))
 
@@ -959,8 +963,8 @@ if get_section_status_code(df_ds_vægtkontrol) == 99:
         add_section_to_word(df_ds_vægtkontrol, section_name, False, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_ds_vægtkontrol))
 
@@ -989,8 +993,8 @@ if get_section_status_code(df_com_statistics) == 99:
         add_section_to_word(df_com_statistics, section_name, False, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_com_statistics))
 
@@ -1012,8 +1016,8 @@ if get_section_status_code(df_karakterer) == 99:
         add_section_to_word(df_karakterer, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_karakterer))
 
@@ -1036,8 +1040,8 @@ if get_section_status_code(df_nav_consumption) == 99:
         add_section_to_word(df_nav_consumption, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_consumption))
 
@@ -1059,8 +1063,8 @@ if get_section_status_code(df_nav_components) == 99:
         add_section_to_word(df_nav_components, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_components))
 
@@ -1100,8 +1104,8 @@ if get_section_status_code(df_nav_lotno) == 99:
         add_section_to_word(df_nav_lotno, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_nav_lotno))
 
@@ -1123,8 +1127,8 @@ if get_section_status_code(df_temp) == 99:
         add_section_to_word(df_temp, section_name, False, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp))
 
@@ -1155,8 +1159,8 @@ if get_section_status_code(df_temp) == 99:
         add_section_to_word(df_temp, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp))
 
@@ -1175,8 +1179,8 @@ if get_section_status_code(df_section_log) == 99:
         add_section_to_word(df_section_log, section_name, False, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-    except: # Insert error into log
-        section_log_insert(section_id, 2)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_section_log))
 

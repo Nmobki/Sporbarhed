@@ -66,6 +66,7 @@ def number_format(value, number_type):
     except:
         return value
 
+# Prevent division by zero error
 def zero_division(nominator, denominator, zero_return):
     dict = {'None':None,'Zero':0}
     if denominator in [0,None]:
@@ -73,11 +74,11 @@ def zero_division(nominator, denominator, zero_return):
     else:
         return nominator / denominator
 
-# Write into dbo.log                **** ÆNDRE SCHEMA TIL dbo VED DRIFT
+# Write into dbo.log
 def log_insert(event, note):
     dict_log = {'Note': note
                 ,'Event': event}
-    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dev', if_exists='append', index=False)
+    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dbo', if_exists='append', index=False)
 
 # Get info from item table
 def get_nav_item_info(item_no, field):
@@ -404,7 +405,7 @@ df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 # Get any related orders identified through Probat
 query_probat_orders = f""" WITH [CTE_ORDERS] AS (
-                       SELECT [ORDER_NAME] AS [Ordrenummer],[S_ORDER_NAME] AS [Relateret ordre]
+                       SELECT [ORDER_NAME] AS [Relateret ordre],[S_ORDER_NAME] AS [Ordrenummer]
                        ,'Probat PG' AS [Kilde]
                        FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
                        GROUP BY	[ORDER_NAME],[S_ORDER_NAME]

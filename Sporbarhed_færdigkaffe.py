@@ -80,10 +80,15 @@ def log_insert(event, note):
                 ,'Event': event}
     pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dbo', if_exists='append', index=False)
 
-# Get info from item table
+# Get info from item table in Navision
 def get_nav_item_info(item_no, field):
     df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
     return df_temp[field].iloc[0]
+
+# Get info from assembly and production orders in Navision
+def get_nav_order_info(order_no):
+    df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
+    return df_temp['Varenummer'].iloc[0]
 
 # Convert placeholder values from dataframe to empty string for Word document
 def convert_placeholders_word(string):
@@ -345,6 +350,23 @@ df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
+
+# Query for getting item numbers for production and assembly orders from Navision
+query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
+                       ,PAH.[Item No_] AS [Varenummer]
+                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PAH.[Item No_] = I.[No_]
+                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
+                           AND I.[Display Item] = 1
+                       UNION ALL
+                       SELECT PO.[No_],PO.[Source No_]
+                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PO.[Source No_] = I.[No_]
+                       WHERE PO.[Status] IN (3,4)
+                           AND I.[Item Category Code] <> 'RÅKAFFE' """
+df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
 # Query to pull various information from Navision for the requested order.
 query_nav_generelt = f""" WITH [RECEPT] AS (
@@ -721,12 +743,18 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 2
 section_name = get_section_name(section_id)
-column_order = ['Ordrenummer','Relateret ordre','Kilde']
+column_order = ['Ordrenummer','Varenummer','Navn',
+                'Relateret ordre','Relateret vare','Relateret navn',
+                'Kilde']
 
 df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
 
 if get_section_status_code(df_temp_orders) == 99:
     try:
+        df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: get_nav_order_info(x))
+        df_temp_orders['Navn'] = df_temp_orders['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
+        df_temp_orders['Relateret vare'] = df_temp_orders['Relateret ordre'].apply(lambda x: get_nav_order_info(x))
+        df_temp_orders['Relateret navn'] = df_temp_orders['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
         df_temp_orders = df_temp_orders[column_order]
         df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
         # Write results to Word and Excel

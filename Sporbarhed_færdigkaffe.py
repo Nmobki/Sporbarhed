@@ -404,23 +404,34 @@ query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
 df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 # Get any related orders identified through Probat
-query_probat_orders = f""" WITH [CTE_ORDERS] AS (
+query_probat_orders = f""" WITH [CTE_ORDERS_PACK] AS (
                        SELECT [ORDER_NAME] AS [Ordrenummer],[S_ORDER_NAME] AS [Relateret ordre]
-                       ,'Probat PG' AS [Kilde]
+                       ,'Probat formalet pakkelinje' AS [Kilde]
                        FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
                        GROUP BY	[ORDER_NAME],[S_ORDER_NAME]
                        UNION ALL
-                       SELECT [ORDER_NAME],[S_ORDER_NAME],'Probat PB'
+                       SELECT [ORDER_NAME],[S_ORDER_NAME],'Probat helbønne pakkelinje'
                        FROM [dbo].[PRO_EXP_ORDER_SEND_PB]
                        GROUP BY	[ORDER_NAME],[S_ORDER_NAME] )
+					   ,[CTE_ORDERS] AS (
                        SELECT [Ordrenummer],[Relateret ordre],[Kilde]
-                       FROM [CTE_ORDERS]
+                       FROM [CTE_ORDERS_PACK]
                        WHERE [Relateret ordre] IN (SELECT [Relateret ordre] 
-                       FROM [CTE_ORDERS] WHERE [Ordrenummer] = '{req_order_no}') """
+                       FROM [CTE_ORDERS_PACK] WHERE [Ordrenummer] = '{req_order_no}'))
+					   SELECT * 
+					   FROM [CTE_ORDERS]
+					   UNION ALL
+					   SELECT [ORDER_NAME] AS [Ordrenummer]
+					   ,[S_ORDER_NAME] AS [Relateret ordre]
+					   ,'Probat mølle' AS [Kilde]
+					   FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+					   WHERE [ORDER_NAME] IN (SELECT [Relateret ordre] FROM [CTE_ORDERS])
+					   GROUP BY [S_ORDER_NAME],[ORDER_NAME] """
 df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
 
-# Get lists of orders and related orders (if any) from Probat
-probat_orders_top = df_probat_orders['Ordrenummer'].unique().tolist()
+# Get lists of orders and related orders (if any) from Probat, first create dataframe with top level orders:
+df_temp_top_level = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
+probat_orders_top = df_temp_top_level['Ordrenummer'].unique().tolist()
 probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
 
 # If order doesn't exist in list, append:
@@ -432,7 +443,7 @@ for order in probat_orders_related:
     if order not in orders_related:
         orders_related.append(order)
 
-req_orders_total = string_to_sql(orders_top_level)
+req_orders_total = string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
 
 # Recursive query to find all relevant produced orders related to the requested order
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)

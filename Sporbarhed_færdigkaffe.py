@@ -353,6 +353,12 @@ df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
 # directly from Navision
 query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   ,[Item Category Code] AS [Varekategorikode]
+				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
+				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
+				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
+				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
+				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
+				  ELSE [Item Category Code] END AS [Varetype]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
@@ -766,19 +772,21 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-        # Section 19: Relation visualization
+            # =================================================================
+            # Section 19: Relation visualization
+            # =================================================================
         #Try to create .png with relations illustrated and add to .docx as well
         try:
             df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
-            df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varekategorikode'))
-            df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varekategorikode'))
+            df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
+            df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
             df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
             df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
             df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
             # Add green coffees
             df_temp_gc_orders = pd.DataFrame(columns=['Primær','Sekundær'])
-            df_temp_gc_orders['Primær'] = 'RISTKAFFE' + '\n' + df_probat_lr['Ordrenummer']
-            df_temp_gc_orders['Sekundær'] = 'RÅKAFFE' + '\n' + df_probat_lr['Kontraktnummer'] + '/' + df_probat_lr['Modtagelse']
+            df_temp_gc_orders['Primær'] = 'Ristet kaffe' + '\n' + df_probat_lr['Ordrenummer']
+            df_temp_gc_orders['Sekundær'] = 'Råkaffe' + '\n' + df_probat_lr['Kontraktnummer'] + '/' + df_probat_lr['Modtagelse']
             df_order_relations = pd.concat([df_temp_order_relation,df_temp_gc_orders])
             # Create relation visualization
             array_for_drawing = list(df_order_relations.itertuples(index=False, name=None))
@@ -786,8 +794,10 @@ if get_section_status_code(df_temp_orders) == 99:
             graph.add_edges_from(array_for_drawing)
             relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
             relations_plot.write_png(path_png_relations)
-            
-            #Add to docx, write to log
+            # Add image to word document
+            doc.add_picture(path_png_relations)
+            # Write to log
+            section_log_insert(19, 0)
         except Exception as e: # Insert error into log. Same section_id as others..
             section_log_insert(19, 2, e)         
     except Exception as e: # Insert error into log
@@ -1242,6 +1252,7 @@ section_name = get_section_name(section_id)
 if get_section_status_code(df_section_log) == 99:
     try:
         df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
+        df_section_log.sort_values(by=['Sektionskode'], inplace=True)
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_section_log, section_name, False)
         add_section_to_word(df_section_log, section_name, False, [0])

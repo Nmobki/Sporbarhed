@@ -779,9 +779,10 @@ if get_section_status_code(df_temp_orders) == 99:
             print('hallo 0.5')
             df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
             print('hallo 0.6')
-            df_temp_order_relation = df_temp_order_relation['Primær','Sekundær']
+            df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
             # Add green coffees
-            df_temp_gc_orders = pd.DataFrame()
+            print('Hallo 0.6.1')
+            df_temp_gc_orders = pd.DataFrame(columns=['Primær','Sekundær'])
             print('hallo 0.7')
             df_temp_gc_orders['Primær'] = 'RISTKAFFE' + '\n' + df_probat_lr['Ordrenummer']
             print('hallo 0.7')
@@ -804,7 +805,7 @@ if get_section_status_code(df_temp_orders) == 99:
             
             #Add to docx, write to log
         except Exception as e: # Insert error into log. Same section_id as others..
-            section_log_insert(section_id, 2, e)         
+            section_log_insert(19, 2, str(e))         
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope

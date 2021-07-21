@@ -35,7 +35,7 @@ def section_log_insert(section, statuscode, errorcode=None):
     df = pd.DataFrame(data={'Forespørgsels_id':req_id,
                             'Sektion':section,
                             'Statuskode':statuscode,
-                            'Fejlkode_script':errorcode}
+                            'Fejlkode_script':str(errorcode)}
                       , index=[0])
     df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
 
@@ -766,46 +766,30 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
+        # Section 19: Relation visualization
         #Try to create .png with relations illustrated and add to .docx as well
         try:
-            print('hallo 0.1')
             df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
-            print('hallo 0.2')
             df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varekategorikode'))
-            print('hallo 0.3')
             df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varekategorikode'))
-            print('hallo 0.4')
             df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
-            print('hallo 0.5')
             df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
-            print('hallo 0.6')
             df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
             # Add green coffees
-            print('Hallo 0.6.1')
             df_temp_gc_orders = pd.DataFrame(columns=['Primær','Sekundær'])
-            print('hallo 0.7')
             df_temp_gc_orders['Primær'] = 'RISTKAFFE' + '\n' + df_probat_lr['Ordrenummer']
-            print('hallo 0.7')
             df_temp_gc_orders['Sekundær'] = 'RÅKAFFE' + '\n' + df_probat_lr['Kontraktnummer'] + '/' + df_probat_lr['Modtagelse']
-            # Concat dataframes
-            print('hallo 0.8')
             df_order_relations = pd.concat([df_temp_order_relation,df_temp_gc_orders])
             # Create relation visualization
-            print('hallo 1')
             array_for_drawing = list(df_order_relations.itertuples(index=False, name=None))
-            print('hallo 2')
-            graph = nx.DiGgraph()
-            print('hallo 3')
-            graph.add_edges_frem(array_for_drawing)
-            print('hallo 4')
+            graph = nx.DiGraph()
+            graph.add_edges_from(array_for_drawing)
             relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
-            print('hallo 5')
             relations_plot.write_png(path_png_relations)
-            print('hallo 6')
             
             #Add to docx, write to log
         except Exception as e: # Insert error into log. Same section_id as others..
-            section_log_insert(19, 2, str(e))         
+            section_log_insert(19, 2, e)         
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope

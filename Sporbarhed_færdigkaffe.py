@@ -438,6 +438,8 @@ query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
 df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
 
 # Get any related orders identified through Probat
+# Pakkelinjer is used to find either grinding or roasting orders used directly in packaging
+# Mølleordrer is used to find roasting orders used for grinding orders
 query_probat_orders = f""" WITH [CTE_ORDERS_PACK] AS (
                        SELECT [ORDER_NAME] AS [Ordrenummer],[S_ORDER_NAME] AS [Relateret ordre]
                        ,'Probat formalet pakkelinje' AS [Kilde]

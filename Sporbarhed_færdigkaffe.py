@@ -775,9 +775,9 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-            # =================================================================
-            # Section 19: Relation visualization
-            # =================================================================
+# =================================================================
+# Section 19: Relation visualization
+# =================================================================
         #Try to create .png with relations illustrated and add to .docx as well
         try:
             df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
@@ -799,6 +799,8 @@ if get_section_status_code(df_temp_orders) == 99:
             relations_plot.write_png(path_png_relations)
             # Add image to word document
             doc.add_picture(path_png_relations, width=Inches(11.0), height=Inches(6.50))
+            # Add image to Excel file
+            
             # Write to log
             section_log_insert(19, 0)
         except Exception as e: # Insert error into log. Same section_id as others..

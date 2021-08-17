@@ -470,14 +470,35 @@ df_temp_top_level = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat m√
 probat_orders_top = df_temp_top_level['Ordrenummer'].unique().tolist()
 probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
 
+# Get related orders from Navision
+query_nav_order_related = f"""WITH [CTE_ORDER] AS (SELECT [Prod_ Order No_]
+                   ,[Reserved Prod_ Order No_]
+                   FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
+                   WHERE [Prod_ Order No_] = '{req_order_no}' )
+                   SELECT [Prod_ Order No_] AS [Ordrenummer] 
+                   ,[Reserved Prod_ Order No_] AS [Relateret ordre]
+                   ,'Navision reservationer' AS [Kilde]
+                   FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
+                   WHERE [Reserved Prod_ Order No_] IN 
+                   (SELECT [Reserved Prod_ Order No_] FROM [CTE_ORDER] )"""
+df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
+
+# Get list of orders and append to lists if they do not already exist
+# Merge Probat and NAV orders before merging
+nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
+nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
+temp_orders_top = probat_orders_top + nav_orders_top
+temp_orders_related = probat_orders_related + nav_orders_related
+
 # If order doesn't exist in list, append:
-for order in probat_orders_top:
+for order in temp_orders_top:
     if order not in  orders_top_level:
         orders_top_level.append(order)
 
-for order in probat_orders_related:
+for order in temp_orders_related:
     if order not in orders_related:
         orders_related.append(order)
+
 
 req_orders_total = string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
 
@@ -760,7 +781,7 @@ section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                 'Relateret vare','Relateret navn','Kilde']
 
-df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
+df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
 
 if get_section_status_code(df_temp_orders) == 99:
     try:

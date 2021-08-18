@@ -191,7 +191,7 @@ log_insert(script_name, f'Request id: {req_id} initiated')
 # Variables for files generated
 # =============================================================================
 filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
-file_name = f'Sporbarhedstest_{req_order_no}_{req_id}'
+file_name = f'Rapport_{req_order_no}_{req_id}'
 
 doc = docx.Document()
 doc.add_heading(f'Rapport for produktionsordre {req_order_no}',0)
@@ -819,8 +819,6 @@ if get_section_status_code(df_temp_orders) == 99:
             relations_plot.write_png(path_png_relations)
             # Add image to word document
             doc.add_picture(path_png_relations, width=Inches(11.0), height=Inches(6.50))
-            # Add image to Excel file
-            
             # Write to log
             section_log_insert(19, 0)
         except Exception as e: # Insert error into log. Same section_id as others..

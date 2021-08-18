@@ -376,7 +376,7 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
                        FROM [dbo].[BKI foods a_s$Production Order] AS PO
                        INNER JOIN [dbo].[BKI foods a_s$Item] AS I
                            ON PO.[Source No_] = I.[No_]
-                       WHERE PO.[Status] IN (3,4)
+                       WHERE PO.[Status] IN (2,3,4)
                            AND I.[Item Category Code] <> 'RÅKAFFE' """
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
@@ -456,6 +456,7 @@ query_probat_orders = f""" WITH [CTE_ORDERS_PACK] AS (
                        FROM [CTE_ORDERS_PACK] WHERE [Ordrenummer] = '{req_order_no}'))
 					   SELECT * 
 					   FROM [CTE_ORDERS]
+                       WHERE [Relateret ordre] <> 'Retour Ground'
 					   UNION ALL
 					   SELECT [ORDER_NAME] AS [Ordrenummer]
 					   ,[S_ORDER_NAME] AS [Relateret ordre]
@@ -492,13 +493,12 @@ temp_orders_related = probat_orders_related + nav_orders_related
 
 # If order doesn't exist in list, append:
 for order in temp_orders_top:
-    if order not in  orders_top_level:
+    if order not in  orders_top_level and order != '':
         orders_top_level.append(order)
 
 for order in temp_orders_related:
     if order not in orders_related:
         orders_related.append(order)
-
 
 req_orders_total = string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
 
@@ -780,7 +780,6 @@ section_id = 2
 section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                 'Relateret vare','Relateret navn','Kilde']
-
 df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
 
 if get_section_status_code(df_temp_orders) == 99:

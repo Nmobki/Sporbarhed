@@ -2,3 +2,4 @@
 .pylint.d/Sporbarhed_færdigkaffe1.stats
 test sankey.py
 test.png
+__pycache__/Sporbarhed_færdigkaffe.cpython-37.pyc

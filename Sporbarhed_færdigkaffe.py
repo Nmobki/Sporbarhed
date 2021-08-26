@@ -226,6 +226,36 @@ query_ds_reporttypes =  f"""SELECT SRS.[Sektion], SS.[Beskrivelse] AS [Sektion n
                        WHERE [Forespørgselstype] = {req_type} """
 df_sections = pd.read_sql(query_ds_reporttypes, con_04)
 
+# Query for Navision items, used for adding information to item numbers not queried directly from Navision
+query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
+                  ,[Item Category Code] AS [Varekategorikode]
+				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
+				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
+				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
+				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
+				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
+				  ELSE [Item Category Code] END AS [Varetype]
+                  FROM [dbo].[BKI foods a_s$Item] """
+df_nav_items = pd.read_sql(query_nav_items, con_nav)
+
+# Query for getting item numbers for production and assembly orders from Navision
+query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
+                       ,PAH.[Item No_] AS [Varenummer]
+                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PAH.[Item No_] = I.[No_]
+                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
+                           AND I.[Display Item] = 1
+                       UNION ALL
+                       SELECT PO.[No_],PO.[Source No_]
+                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PO.[Source No_] = I.[No_]
+                       WHERE PO.[Status] IN (2,3,4)
+                           AND I.[Item Category Code] <> 'RÅKAFFE' """
+df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+
+
 # =============================================================================
 # Queries for different parts of report
 # =============================================================================
@@ -349,36 +379,6 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        ,CTE.[Nominal] AS [Nominel vægt g],CTE.[Tare] AS [Taravægt g]
                        FROM CTE """
 df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
-
-# Query for Navision items, used for adding information to item numbers not queried
-# directly from Navision
-query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
-                  ,[Item Category Code] AS [Varekategorikode]
-				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
-				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
-				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
-				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
-				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
-				  ELSE [Item Category Code] END AS [Varetype]
-                  FROM [dbo].[BKI foods a_s$Item] """
-df_nav_items = pd.read_sql(query_nav_items, con_nav)
-
-# Query for getting item numbers for production and assembly orders from Navision
-query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
-                       ,PAH.[Item No_] AS [Varenummer]
-                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PAH.[Item No_] = I.[No_]
-                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
-                           AND I.[Display Item] = 1
-                       UNION ALL
-                       SELECT PO.[No_],PO.[Source No_]
-                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PO.[Source No_] = I.[No_]
-                       WHERE PO.[Status] IN (2,3,4)
-                           AND I.[Item Category Code] <> 'RÅKAFFE' """
-df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
 # Query to pull various information from Navision for the requested order.
 query_nav_generelt = f""" WITH [RECEPT] AS (
@@ -1292,6 +1292,7 @@ log_insert(script_name, f'Excel file {file_name} created')
 
 doc.save(path_file_doc)
 log_insert(script_name, f'Word document {file_name} created')
+
 
 # =============================================================================
 # Write into email log

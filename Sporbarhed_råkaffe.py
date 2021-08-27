@@ -87,10 +87,6 @@ def get_nav_item_info(item_no, field):
     df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
     return df_temp[field].iloc[0]
 
-# Get info from assembly and production orders in Navision
-def get_nav_order_info(order_no):
-    df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
-    return df_temp['Varenummer'].iloc[0]
 
 # Convert placeholder values from dataframe to empty string for Word document
 def convert_placeholders_word(string):
@@ -137,12 +133,6 @@ db_nav = 'NAV100-DRIFT'
 con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
 params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
 engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
-
-server_comscale = r'comscale-bki\sqlexpress'
-db_comscale = 'ComScaleDB'
-con_comscale = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_comscale};DATABASE={db_comscale}')
-params_comscale = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_comscale};DATABASE={db_comscale};Trusted_Connection=yes')
-engine_comscale = create_engine(f'mssql+pyodbc:///?odbc_connect={params_comscale}')
 
 server_probat = '192.168.125.161'
 db_probat = 'BKI_IMP_EXP'

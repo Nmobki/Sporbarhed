@@ -18,7 +18,8 @@ import networkx as nx
 
 # Get section name for section from query
 def get_section_name(section):
-    x = df_sections['Sektion navn'].iloc[section-1]
+    df_temp_sections = df_sections.loc[df_sections['Sektion'] == section]
+    x = df_temp_sections['Sektion navn'].iloc[0]
     if len(x) == 0 or len(x) > 31:
         return 'Sektion ' + str(section)
     else:

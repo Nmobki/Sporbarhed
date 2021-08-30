@@ -268,9 +268,9 @@ class rapport_færdigkaffe:
                             ON SF.[Referencenummer] = SK.[Referencenummer]
                         WHERE SF.[Id] = {req_id} """
     df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
-    
+
     production_machine = df_results_generelt['Pakkelinje'].iloc[0]
-    
+
     # Query for getting item numbers for production and assembly orders from Navision
     query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
                            ,PAH.[Item No_] AS [Varenummer]
@@ -287,7 +287,7 @@ class rapport_færdigkaffe:
                            WHERE PO.[Status] IN (2,3,4)
                                AND I.[Item Category Code] <> 'RÅKAFFE' """
     df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
-    
+
     # Query to get all samples registrered for the requested order.
     # Dataframe to be filtered later on to split by sample type.
     query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspunkt]
@@ -317,7 +317,7 @@ class rapport_færdigkaffe:
                            AND SK.[Id_org_kildenummer] = 6
                        WHERE KP.[Ordrenummer] = '{req_reference_no}' """
     df_prøver = pd.read_sql(query_ds_samples, con_04)
-    
+
     # All grades given for the requested order. Coalesce is to ensure that query
     # returns no results if record exists but no grades have been given
     query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre] AS [Syre]
@@ -329,7 +329,7 @@ class rapport_færdigkaffe:
                               AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
                                 [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
     df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
-    
+
     # If lotnumbers from requested order have been checked for leakage the information
     # from the check is returned with this query. Will often return no results
     query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
@@ -340,13 +340,13 @@ class rapport_færdigkaffe:
     				   'Over grænseværdi' ELSE 'Ok' END AS [Resultat af kontrol]
                        FROM [cof].[Vac_slip] """
     df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
-    
+
     # Primary packaging material - valve for bag
     query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
                       FROM [cof].[Ventil_registrering]
                       WHERE [Ordrenummer] = '{req_reference_no}' """
     df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
-    
+
     # Query section log for each section logged per script-run.
     # Query is only executed at the end of the script
     query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
@@ -358,7 +358,7 @@ class rapport_færdigkaffe:
                            INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
                                 ON SL.[Statuskode] = SS.[Id]
                            WHERE SL.[Forespørgsels_id] = {req_id} """
-    
+
     # Order statistics from Comscale. Only for good bags (trade)
     query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                            ,SUM( SD.[MeanValueTrade] * SD.[CounterGoodTrade] ) AS [Total vægt]
@@ -379,7 +379,7 @@ class rapport_færdigkaffe:
                            ,CTE.[Nominal] AS [Nominel vægt g],CTE.[Tare] AS [Taravægt g]
                            FROM CTE """
     df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
-    
+
     # Query to pull various information from Navision for the requested order.
     query_nav_generelt = f""" WITH [RECEPT] AS (
                          SELECT	POC.[Prod_ Order No_],I.[No_]
@@ -422,9 +422,9 @@ class rapport_færdigkaffe:
                          LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                          WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
-    
+
     production_date = df_nav_generelt['Produktionsdato'].iloc[0]
-    
+
     # Control of scales in packing area, 3 days back and 1 day ahead of production date
     query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
                            ,V.[Registreret_af] AS [Registreret af],V.[Vægt],V.[Serienummer]
@@ -436,7 +436,7 @@ class rapport_færdigkaffe:
                            AND DATEADD(d, DATEDIFF(d, 0, V.[Registreringstidspunkt] ), 0) 
                            BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
     df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
-    
+
     # Get any related orders identified through Probat
     # Pakkelinjer is used to find either grinding or roasting orders used directly in packaging
     # Mølleordrer is used to find roasting orders used for grinding orders
@@ -465,12 +465,12 @@ class rapport_færdigkaffe:
     					   WHERE [ORDER_NAME] IN (SELECT [Relateret ordre] FROM [CTE_ORDERS])
     					   GROUP BY [S_ORDER_NAME],[ORDER_NAME] """
     df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
-    
+
     # Get lists of orders and related orders (if any) from Probat, first create dataframe with top level orders:
     df_temp_top_level = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
     probat_orders_top = df_temp_top_level['Ordrenummer'].unique().tolist()
     probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
-    
+
     # Get related orders from Navision
     query_nav_order_related = f"""WITH [CTE_ORDER] AS (SELECT [Prod_ Order No_]
                        ,[Reserved Prod_ Order No_]
@@ -483,25 +483,25 @@ class rapport_færdigkaffe:
                        WHERE [Reserved Prod_ Order No_] IN 
                        (SELECT [Reserved Prod_ Order No_] FROM [CTE_ORDER] )"""
     df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
-    
+
     # Get list of orders and append to lists if they do not already exist
     # Merge Probat and NAV orders before merging
     nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
     nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
     temp_orders_top = probat_orders_top + nav_orders_top
     temp_orders_related = probat_orders_related + nav_orders_related
-    
+
     # If order doesn't exist in list, append:
     for order in temp_orders_top:
         if order not in  orders_top_level and order != '':
             orders_top_level.append(order)
-    
+
     for order in temp_orders_related:
         if order not in orders_related:
             orders_related.append(order)
-    
+
     req_orders_total = string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
-    
+
     # Recursive query to find all relevant produced orders related to the requested order
     # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
     # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
@@ -539,7 +539,7 @@ class rapport_færdigkaffe:
                                 	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
                                 GROUP BY ILE.[Item No_],I.[Description] """
     df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
-    
+
     # Recursive query to get all customer who purchased identified lotnumbers.
     # See explanation of query above
     query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
@@ -571,7 +571,7 @@ class rapport_færdigkaffe:
                           WHERE ILE.[Entry Type] = 1
                           GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
     df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
-    
+
     # Query to show relation between requested order and any orders which have used it as components
     query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
@@ -605,7 +605,7 @@ class rapport_færdigkaffe:
                                   WHERE DC.[Document No_] IS NOT NULL
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
     df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
-    
+
     # Lotnumber information for the originally requested order
     query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
                 	  ,LI.[Certificate Number] AS [Pallenummer]
@@ -625,7 +625,7 @@ class rapport_færdigkaffe:
                     	  AND ILE.[Entry Type] = 6
                           AND ILE.[Order No_] = '{req_reference_no}' """
     df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
-    
+
     # Primary packaging components used for the originally requested order
     query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
                     	   ,I.[Description] AS [Varenavn]
@@ -643,7 +643,7 @@ class rapport_færdigkaffe:
                                ON POC.[Item No_] = I.[No_]
                            WHERE POAC.[Prod_ Order No_] = '{req_reference_no}' """
     df_nav_components = pd.read_sql(query_nav_components, con_nav)
-    
+
     # Components used for the originally requested order
     query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
                         	,I.[Description] AS [Varenavn]
@@ -656,9 +656,9 @@ class rapport_færdigkaffe:
                             	AND ILE.[Entry Type] = 5
                             GROUP BY ILE.[Item No_] ,I.[Description],I.[Base Unit of Measure] """
     df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
-    
+
     q_related_orders = string_to_sql(orders_related)
-    
+
     # Related grinding orders - information for batches out of grinder to include rework
     query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                        ,[PRODUCTION_ORDER_ID] AS [Probat id] ,[SOURCE_NAME] AS [Mølle]
@@ -672,7 +672,7 @@ class rapport_færdigkaffe:
                                           'Receptnummer','Silo','Kilo'])
     if len(q_related_orders) != 0:
         df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
-    
+
     # Find related roasting orders from any related grinding orders
     query_probat_lg = f""" SELECT [S_ORDER_NAME]
                            FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
@@ -681,14 +681,14 @@ class rapport_færdigkaffe:
     df_probat_lg = pd.DataFrame(columns=['S_ORDER_NAME'])
     if len(q_related_orders) != 0:
         df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
-    
+
     if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
         for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
             if order not in orders_related:
                 orders_related.append(order)
-    
+
     q_related_orders = string_to_sql(orders_related)
-    
+
     # Find information for identified roasting orders, batches out of roaster
     query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
                             ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
@@ -704,7 +704,7 @@ class rapport_færdigkaffe:
                                           'Ordrenummer','Kilo','Silo'])
     if len(q_related_orders) != 0:
         df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
-    
+
     # Find green coffee related to orders
     query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
                     ,[S_CONTRACT_NO] AS [Kontraktnummer]
@@ -718,7 +718,7 @@ class rapport_færdigkaffe:
                                          'Modtagelse','Ordrenummer','Kilo'])
     if len(q_related_orders) != 0:
         df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
-    
+
     # =============================================================================
     # Section 1: Generelt
     # =============================================================================
@@ -735,7 +735,7 @@ class rapport_færdigkaffe:
                      'Taravægt']
     columns_0_dec = ['Henstandsprøver','Referenceprøver','Kontrolprøver']
     columns_0_pct = ['Nitrogen']
-    
+
     if get_section_status_code(df_nav_generelt) == 99:
         try:
             df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
@@ -772,7 +772,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_nav_generelt))
-    
+
     # =============================================================================
     # Section 2: Relaterede ordrer NAV --> Probat
     # =============================================================================
@@ -781,7 +781,7 @@ class rapport_færdigkaffe:
     column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                     'Relateret vare','Relateret navn','Kilde']
     df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
-    
+
     if get_section_status_code(df_temp_orders) == 99:
         try:
             df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: get_nav_order_info(x))
@@ -822,12 +822,12 @@ class rapport_færdigkaffe:
                 # Write to log
                 section_log_insert(19, 0)
             except Exception as e: # Insert error into log. Same section_id as others..
-                section_log_insert(19, 2, e)         
+                section_log_insert(19, 2, e)
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_orders))
-    
+
     # =============================================================================
     # Section 3: Færdigvaretilgang
     # =============================================================================
@@ -835,7 +835,7 @@ class rapport_færdigkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
-    
+
     if get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
             # Create total for dataframe
@@ -859,7 +859,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 4: Mølleordrer
     # =============================================================================
@@ -868,7 +868,7 @@ class rapport_færdigkaffe:
     column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
                     'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
     columns_1_dec = ['Kilo']
-    
+
     if get_section_status_code(df_probat_ulg) == 99:
         try:
             # Create total for dataframe
@@ -892,7 +892,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 5: Risteordrer
     # =============================================================================
@@ -901,7 +901,7 @@ class rapport_færdigkaffe:
     column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
                     'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
     columns_1_dec = ['Kilo']
-    
+
     if get_section_status_code(df_probat_ulr) == 99:
         try:
             # Create total for dataframe
@@ -925,7 +925,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 6: Råkaffeforbrug
     # =============================================================================
@@ -934,7 +934,7 @@ class rapport_færdigkaffe:
     column_order = ['Sortnummer','Sortnavn','Kontraktnummer','Modtagelse', 'Silo',
                     'Ordrenummer','Kilo']
     columns_1_dec = ['Kilo']
-    
+
     if get_section_status_code(df_probat_lr) == 99:
         try:
             # Create total for dataframe
@@ -957,7 +957,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 7: Debitorer
     # =============================================================================
@@ -965,7 +965,7 @@ class rapport_færdigkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
     columns_1_dec = ['Enheder','Kilo']
-    
+
     if get_section_status_code(df_nav_debitorer) == 99:
         try:
             # Create total for dataframe
@@ -989,7 +989,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 8: Massebalance
     # =============================================================================
@@ -998,7 +998,7 @@ class rapport_færdigkaffe:
     columns_1_dec = ['[1] Råkaffe','[2] Ristet kaffe','[3] Difference','[5] Færdigvaretilgang',
                      '[6] Difference','[8] Salg','[9] Regulering & ompak','[10] Restlager','[11] Difference']
     columns_2_pct = ['[4] Difference pct','[7] Difference pct','[12] Difference pct']
-    
+
     dict_massebalance = {'[1] Råkaffe': df_probat_lr['Kilo'].sum(),
                          '[2] Ristet kaffe': df_probat_ulr['Kilo'].sum(),
                          '[3] Difference': None,
@@ -1024,14 +1024,14 @@ class rapport_færdigkaffe:
         dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')
     for col in columns_2_pct:
         dict_massebalance[col] = number_format(dict_massebalance[col] ,'pct_2')
-    
+
     df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
     df_massebalance.columns = ['Sektion','Værdi']
     df_massebalance['Note'] = [None, None, '[1] - [2]', '[3] / [1]', None, '[2] - [5]',
                                '[6] / [2]', None, None, None, '[5] - [8] - [9] - [10]',
                                '[11] / [5]']
     df_massebalance['Bemærkning'] = None
-    
+
     if get_section_status_code(df_massebalance) == 99:
         try:
             # Write results to Word and Excel
@@ -1043,7 +1043,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_massebalance))
-    
+
     # =============================================================================
     # Section 10: Vægtkontrol
     # =============================================================================
@@ -1051,7 +1051,7 @@ class rapport_færdigkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Registreringstidspunkt','Serienummer','Vægt','Status','Registreret af']
     columns_2_dec = ['Vægt']
-    
+
     if get_section_status_code(df_ds_vægtkontrol) == 99:
         try:
             df_ds_vægtkontrol = df_ds_vægtkontrol[column_order]
@@ -1068,7 +1068,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_ds_vægtkontrol))
-    
+
     # =============================================================================
     # Section 11: Ordrestatistik fra e-vejning (poser)
     # =============================================================================
@@ -1078,7 +1078,7 @@ class rapport_færdigkaffe:
                     'Gns. godvægt per enhed g', 'Godvægt total g', 'Nominel vægt g', 'Taravægt g']
     columns_2_dec = ['Total vægt kg', 'Antal poser', 'Middelvægt g', 'Standardafvigelse g',
                     'Gns. godvægt per enhed g', 'Godvægt total g', 'Nominel vægt g', 'Taravægt g']
-    
+
     if get_section_status_code(df_com_statistics) == 99:
         try:
             df_com_statistics = df_com_statistics[column_order]
@@ -1098,14 +1098,14 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_com_statistics))
-    
+
     # =============================================================================
     # Section 12: Karakterer
     # =============================================================================
     section_id = 12
     section_name = get_section_name(section_id)
     columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
-    
+
     if get_section_status_code(df_karakterer) == 99:
         try:
             # Column formating
@@ -1121,7 +1121,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_karakterer))
-    
+
     # =============================================================================
     # Section 13: Komponentforbrug
     # =============================================================================
@@ -1129,7 +1129,7 @@ class rapport_færdigkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Basisenhed','Antal']
     columns_1_dec = ['Antal']
-    
+
     if get_section_status_code(df_nav_consumption) == 99:
         try:
             df_nav_consumption = df_nav_consumption[column_order]
@@ -1145,7 +1145,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_nav_consumption))
-    
+
     # =============================================================================
     # Section 14: Anvendt primæremballage
     # =============================================================================
@@ -1153,7 +1153,7 @@ class rapport_færdigkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
                     'Pakkedato','Købsordre']
-    
+
     if get_section_status_code(df_nav_components) == 99:
         try:
             df_nav_components = pd.concat([df_nav_components, df_ds_ventil])
@@ -1180,7 +1180,7 @@ class rapport_færdigkaffe:
     columns_0_dec = ['Antal poser','Antal leakers']
     columns_1_dec = ['Kilo']
     columns_2_pct = ['Leakers pct']
-    
+
     if get_section_status_code(df_nav_lotno) == 99:
         try:
             df_nav_lotno = pd.merge(df_nav_lotno, df_ds_vacslip, left_on = 'Lotnummer',
@@ -1209,7 +1209,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_nav_lotno))
-    
+
     # =============================================================================
     # Section 16: Reference- og henstandsprøver
     # =============================================================================
@@ -1218,7 +1218,7 @@ class rapport_færdigkaffe:
     column_order = ['Id', 'Registreringstidspunkt', 'Operatør', 'Silo', 'Prøvetype',
                     'Bemærkning', 'Smagning status', 'Antal prøver']
     df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
-    
+
     if get_section_status_code(df_temp) == 99:
         try:
             df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
@@ -1232,7 +1232,7 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp))
-    
+
     # =============================================================================
     # Section 17: Udtagne kontrolprøver
     # =============================================================================
@@ -1244,7 +1244,7 @@ class rapport_færdigkaffe:
     columns_2_dec = ['Vægt']
     columns_0_pct = ['Ilt']
     df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
-    
+
     if get_section_status_code(df_temp) == 99:
         try:
             df_temp['Registreringstidspunkt'] = df_temp['Registreringstidspunkt'].dt.strftime('%d-%m-%Y %H:%M')
@@ -1264,14 +1264,14 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp))
-    
+
     # =============================================================================
     # Section 18: Sektionslog
     # =============================================================================
     section_id = 18
     df_section_log = pd.read_sql(query_ds_section_log, con_04)
     section_name = get_section_name(section_id)
-    
+
     if get_section_status_code(df_section_log) == 99:
         try:
             df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
@@ -1285,11 +1285,11 @@ class rapport_færdigkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_section_log))
-    
+
     #Save files
     excel_writer.save()
     log_insert(script_name, f'Excel file {file_name} created')
-    
+
     doc.save(path_file_doc)
     log_insert(script_name, f'Word document {file_name} created')
 

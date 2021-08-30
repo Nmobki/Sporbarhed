@@ -175,7 +175,7 @@ cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                   SET [Forespørgsel_igangsat] = getdate()
                   WHERE [Id] = {req_id} """)
 cursor_04.commit()
-log_insert(script_name, f'Request id: {req_id} initiated')
+# log_insert(script_name, f'Request id: {req_id} initiated')
 
 # =============================================================================
 # Variables for files generated
@@ -229,7 +229,87 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
 class rapport_råkaffe:
-    pass
+    query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
+                    	,V.[Name] AS [Leverandørnavn] ,PL.[No_] AS [Varenummer]
+                        ,I.[Description] AS [Varenavn] ,I.[Mærkningsordning]
+                        FROM [dbo].[BKI foods a_s$Purchase Line] AS PL
+                        INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                            ON PL.[No_] = I.[No_]
+                        LEFT JOIN [dbo].[BKI foods a_s$Vendor] AS V
+                            ON PL.[Buy-from Vendor No_] = V.[No_]
+                        WHERE PL.[Type] = 2
+                            AND PL.[Document No_] = '{req_reference_no}' """
+    df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
+
+    query_probat_inventory_timestamp = """ WITH [Tables] AS (
+                                       SELECT MAX([RECORDING_DATE]) AS [Date]
+                                        FROM [dbo].[PRO_EXP_PRODUCT_POS_INVENTORY]
+                                        UNION ALL
+                                        SELECT MAX([RECORDING_DATE])
+                                        FROM [dbo].[PRO_EXP_WAREHOUSE_INVENTORY] )
+                                        SELECT MIN([Date]) AS [Silobeholdning eksporteret]
+                                        FROM [Tables] """
+    df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
+
+    query_probat_receiving = f""" """
+
+
+    print(req_modtagelse)
+
+
+
+    # =============================================================================
+    # Section 1: Generelt
+    # =============================================================================
+    section_id = 1
+    section_name = get_section_name(section_id)
+    column_order = ['Kontraktnummer','Modtagelse','Varenummer','Varenavn','Mærkningsordning','Leverandørnummer'
+                    ,'Leverandørnavn','Silobeholdning eksporteret']
+
+    if get_section_status_code(df_nav_generelt) == 99:
+        try:
+            df_nav_generelt['Kontraktnummer'] = req_reference_no
+            df_nav_generelt['Modtagelse'] = req_modtagelse
+            df_nav_generelt['Silobeholdning eksporteret'] = df_probat_inventory_timestamp['Silobeholdning eksporteret'].iloc[0]
+            # Apply column formating
+            df_nav_generelt['Silobeholdning eksporteret'] = df_nav_generelt['Silobeholdning eksporteret'].dt.strftime('%d-%m-%Y %H:%M')
+            # Transpose dataframe
+            df_nav_generelt = df_nav_generelt[column_order].transpose()
+            df_nav_generelt = df_nav_generelt.reset_index()
+            df_nav_generelt.columns = ['Sektion','Værdi']
+            # Write results to Word and Excel
+            try:
+                insert_dataframe_into_excel (df_nav_generelt, section_name, True)
+            except Exception as e:
+                print(e)
+            add_section_to_word(df_nav_generelt, section_name, True, [0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_nav_generelt))
+
+
+
+
+
+
+
+
+    #Save files
+    excel_writer.save()
+    # log_insert(script_name, f'Excel file {file_name} created')
+
+    doc.save(path_file_doc)
+    # log_insert(script_name, f'Word document {file_name} created')
+
+
+
+
+
+
+
 
 if req_type == 0:
     pass
@@ -247,8 +327,8 @@ dict_email_log = {'Filsti': filepath
                   ,'Emne': f'Anmodet rapport for ordre {req_reference_no}'
                   ,'Forespørgsels_id': req_id
                   ,'Note':req_note}
-pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
-log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
+# pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+# log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
 # =============================================================================
 # Update request that dataprocessing has been completed
@@ -257,7 +337,7 @@ cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                   SET Data_færdigbehandlet = 1
                   WHERE [Id] = {req_id}""")
 cursor_04.commit()
-log_insert(script_name, f'Request id: {req_id} completed')
+# log_insert(script_name, f'Request id: {req_id} completed')
 
 # Exit script
 raise SystemExit(0)

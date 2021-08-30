@@ -251,10 +251,36 @@ class rapport_råkaffe:
                                         FROM [Tables] """
     df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
 
-    query_probat_receiving = f""" """
+    query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
+                             BEGIN
+                             SELECT	CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
+                             RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                    		,NULL AS [Restlager]
+                            FROM [dbo].[PRO_EXP_REC_ARRIVE]
+                        	WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                        	UNION ALL
+                        	SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
+                        	FROM [dbo].[Newest total inventory]
+                        	WHERE [Kontrakt] = '20-104' AND [Placering] NOT LIKE '2__'
+                        	GROUP BY [Placering]
+                            END
+                        
+                            IF '{req_modtagelse}' <> 'None' -- Modtagelse er udfyldt
+                            BEGIN
+                            	SELECT CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
+                            	,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                            	,NULL AS [Restlager]
+                            	FROM [dbo].[PRO_EXP_REC_ARRIVE]
+                            	WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                            		AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '1'
+                            	UNION ALL
+                            	SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
+                            	FROM [dbo].[Newest total inventory]
+                            	WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '1'
+                            		AND [Placering] NOT LIKE '2__'
+                                    GROUP BY [Placering] END """
 
 
-    print(req_modtagelse)
 
 
 

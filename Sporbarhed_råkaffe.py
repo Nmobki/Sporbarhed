@@ -254,33 +254,33 @@ class rapport_råkaffe:
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
                              BEGIN
                              SELECT	CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
-                             RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
-                    		,NULL AS [Restlager]
-                            FROM [dbo].[PRO_EXP_REC_ARRIVE]
-                        	WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
-                        	UNION ALL
-                        	SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
-                        	FROM [dbo].[Newest total inventory]
-                        	WHERE [Kontrakt] = '20-104' AND [Placering] NOT LIKE '2__'
-                        	GROUP BY [Placering]
-                            END
-                        
-                            IF '{req_modtagelse}' <> 'None' -- Modtagelse er udfyldt
-                            BEGIN
-                            	SELECT CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
-                            	,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
-                            	,NULL AS [Restlager]
-                            	FROM [dbo].[PRO_EXP_REC_ARRIVE]
-                            	WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
-                            		AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '1'
-                            	UNION ALL
-                            	SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
-                            	FROM [dbo].[Newest total inventory]
-                            	WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '1'
-                            		AND [Placering] NOT LIKE '2__'
-                                    GROUP BY [Placering] END """
-
-
+                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                    		 ,NULL AS [Restlager]
+                             FROM [dbo].[PRO_EXP_REC_ARRIVE]
+                        	 WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                        	 UNION ALL
+                        	 SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
+                        	 FROM [dbo].[Newest total inventory]
+                        	 WHERE [Kontrakt] = '20-104' AND [Placering] NOT LIKE '2__'
+                        	 GROUP BY [Placering]
+                             END
+                             IF '{req_modtagelse}' <> 'None' -- Modtagelse er udfyldt
+                             BEGIN
+                             SELECT CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
+                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                             ,NULL AS [Restlager]
+                             FROM [dbo].[PRO_EXP_REC_ARRIVE]
+                             WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                             AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '1'
+                             UNION ALL
+                             SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
+                             FROM [dbo].[Newest total inventory]
+                             WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '1'
+                             AND [Placering] NOT LIKE '2__'
+                             GROUP BY [Placering] END """
+    df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
+    print(query_probat_receiving)
+    print(df_probat_receiving)
 
 
 

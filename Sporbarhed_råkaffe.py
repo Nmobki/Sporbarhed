@@ -255,7 +255,7 @@ class rapport_råkaffe:
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
                              BEGIN
                              SELECT	CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
-                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] / 10.0 AS [Kilo]
                     		 ,NULL AS [Restlager]
                              FROM [dbo].[PRO_EXP_REC_ARRIVE]
                         	 WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
@@ -268,7 +268,7 @@ class rapport_råkaffe:
                              IF '{req_modtagelse}' <> 'None' -- Modtagelse er udfyldt
                              BEGIN
                              SELECT CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
-                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] AS [Kilo]
+                             ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] / 10.0 AS [Kilo]
                              ,NULL AS [Restlager]
                              FROM [dbo].[PRO_EXP_REC_ARRIVE]
                              WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
@@ -323,19 +323,26 @@ class rapport_råkaffe:
 
     if get_section_status_code(df_probat_receiving) == 99:
         try:
+            # Create total for dataframe
+            dict_modtagelse_total = {'Kilo': [df_probat_receiving['Kilo'].sum()],
+                                     'Restlager': [df_probat_receiving['Restlager'].sum()]}
+            # Create temp dataframe including total
+            df_temp_total = pd.concat([df_probat_receiving, 
+                                       pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
             # Apply column formating
-            df_probat_receiving['Dato'] = df_probat_receiving['Dato'].dt.strftime('%d-%m-%Y')
+            df_temp_total['Dato'] = df_temp_total['Dato'].dt.strftime('%d-%m-%Y')
             for col in columns_0_dec:
-                df_probat_receiving[col] = df_probat_receiving[col].apply(lambda x: number_format(x, 'dec_0'))
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            df_temp_total = df_temp_total[column_order]
             # Write results to Word and Excel
-            insert_dataframe_into_excel(df_probat_receiving, section_name, False)
-            add_section_to_word(df_probat_receiving, section_name, True, [0,-1])
+            insert_dataframe_into_excel(df_temp_total, section_name, False)
+            add_section_to_word(df_temp_total, section_name, True, [-1,0])
             # Write status into log
             section_log_insert(section_id, 0)
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        section_log_insert(section_id, get_section_status_code(df_probat_receiving))
+        section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 
 

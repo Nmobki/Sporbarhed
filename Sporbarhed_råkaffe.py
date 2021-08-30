@@ -18,7 +18,8 @@ import networkx as nx
 
 # Get section name for section from query
 def get_section_name(section):
-    x = df_sections['Sektion navn'].iloc[section-1]
+    df_temp_sections = df_sections.loc[df_sections['Sektion'] == section]
+    x = df_temp_sections['Sektion navn'].iloc[0]
     if len(x) == 0 or len(x) > 31:
         return 'Sektion ' + str(section)
     else:
@@ -279,8 +280,7 @@ class rapport_råkaffe:
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
-    print(query_probat_receiving)
-    print(df_probat_receiving)
+
 
 
 
@@ -304,10 +304,7 @@ class rapport_råkaffe:
             df_nav_generelt = df_nav_generelt.reset_index()
             df_nav_generelt.columns = ['Sektion','Værdi']
             # Write results to Word and Excel
-            try:
-                insert_dataframe_into_excel (df_nav_generelt, section_name, True)
-            except Exception as e:
-                print(e)
+            insert_dataframe_into_excel(df_nav_generelt, section_name, True)
             add_section_to_word(df_nav_generelt, section_name, True, [0])
             # Write status into log
             section_log_insert(section_id, 0)
@@ -316,7 +313,29 @@ class rapport_råkaffe:
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_nav_generelt))
 
+    # =============================================================================
+    # Section 21: Modtagelse
+    # =============================================================================
+    section_id = 21
+    section_name = get_section_name(section_id)
+    column_order = ['Placering','Dato','Kilo','Restlager']
+    columns_0_dec = ['Kilo','Restlager']
 
+    if get_section_status_code(df_probat_receiving) == 99:
+        try:
+            # Apply column formating
+            df_probat_receiving['Dato'] = df_probat_receiving['Dato'].dt.strftime('%d-%m-%Y')
+            for col in columns_0_dec:
+                df_probat_receiving[col] = df_probat_receiving[col].apply(lambda x: number_format(x, 'dec_0'))
+            # Write results to Word and Excel
+            insert_dataframe_into_excel(df_probat_receiving, section_name, False)
+            add_section_to_word(df_probat_receiving, section_name, True, [0,-1])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_probat_receiving))
 
 
 

@@ -232,6 +232,7 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
 class rapport_råkaffe:
+    # General info from Navision
     query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
                     	,V.[Name] AS [Leverandørnavn] ,PL.[No_] AS [Varenummer]
                         ,I.[Description] AS [Varenavn] ,I.[Mærkningsordning]
@@ -243,7 +244,8 @@ class rapport_råkaffe:
                         WHERE PL.[Type] = 2
                             AND PL.[Document No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
-
+    
+    # Get timestamp for last export of inventory from Probat
     query_probat_inventory_timestamp = """ WITH [Tables] AS (
                                        SELECT MAX([RECORDING_DATE]) AS [Date]
                                         FROM [dbo].[PRO_EXP_PRODUCT_POS_INVENTORY]
@@ -253,18 +255,20 @@ class rapport_råkaffe:
                                         SELECT MIN([Date]) AS [Silobeholdning eksporteret]
                                         FROM [Tables] """
     df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
-
+    
+    # Information from Probat for the receiving of coffee
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
                              BEGIN
                              SELECT	CAST([DESTINATION] AS VARCHAR(20)) AS [Placering]
                              ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] / 10.0 AS [Kilo]
                     		 ,NULL AS [Restlager]
                              FROM [dbo].[PRO_EXP_REC_ARRIVE]
-                        	 WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                        	 WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '{req_reference_no}'
                         	 UNION ALL
                         	 SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
                         	 FROM [dbo].[Newest total inventory]
-                        	 WHERE [Kontrakt] = '20-104' AND [Placering] NOT LIKE '2__'
+                        	 WHERE [Kontrakt] = '{req_reference_no}' 
+                             AND [Placering] NOT LIKE '2__'
                         	 GROUP BY [Placering]
                              END
                              IF '{req_modtagelse}' <> 'None' -- Modtagelse er udfyldt
@@ -273,42 +277,44 @@ class rapport_råkaffe:
                              ,[RECORDING_DATE] AS [Dato] ,[PAPER_VALUE] / 10.0 AS [Kilo]
                              ,NULL AS [Restlager]
                              FROM [dbo].[PRO_EXP_REC_ARRIVE]
-                             WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
+                             WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '{req_reference_no}'
                              AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '{req_modtagelse}'
                              UNION ALL
                              SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
                              FROM [dbo].[Newest total inventory]
-                             WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '{req_modtagelse}'
+                             WHERE [Kontrakt] = '{req_reference_no}' 
+                             AND CAST([Modtagelse] AS VARCHAR(20)) = '{req_modtagelse}'
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
-
+    
+    # Information from Probat for the processing of coffee
     query_probat_processing = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
                               BEGIN
-                              SELECT [DESTINATION] AS [Placering]
+                              SELECT [DESTINATION] AS [Silo]
                               ,[CUSTOMER_CODE] AS [Varenummer]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
                               ,SUM([WEIGHT] / 10.0) AS [Kilo]
                               ,0 AS [Restlager]
                               FROM [dbo].[PRO_EXP_REC_SUM_DEST]
-                              WHERE [CONTRACT_NO] = '20-104' AND [DESTINATION] LIKE '2__'
+                              WHERE [CONTRACT_NO] = '{req_reference_no}' AND [DESTINATION] LIKE '2__'
                               GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
                               ,[CUSTOMER_CODE]
                               UNION ALL
                               SELECT [Placering] ,[Varenummer] ,NULL ,0 ,SUM([Kilo])
                               FROM [dbo].[Newest total inventory]
-                              WHERE [Kontrakt] = '20-104' AND [Placering]  LIKE '2__'
+                              WHERE [Kontrakt] = '{req_reference_no}' AND [Placering]  LIKE '2__'
                               GROUP BY [Placering] ,[Varenummer]
                               END
                               IF 'None' <> 'None' -- Modtagelse tastet
                               BEGIN
-                              SELECT [DESTINATION] AS [Placering]
+                              SELECT [DESTINATION] AS [Silo]
                               ,[CUSTOMER_CODE] AS [Varenummer]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
                               ,SUM([WEIGHT] / 10.0) AS [Kilo]
                               ,0 AS [Restlager]
                               FROM [dbo].[PRO_EXP_REC_SUM_DEST]
-                              WHERE [CONTRACT_NO] = '20-104'
+                              WHERE [CONTRACT_NO] = '{req_reference_no}'
                               AND [DESTINATION] LIKE '2__'
                               AND [DELIVERY_NAME] = '{req_modtagelse}'
                               GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
@@ -317,13 +323,87 @@ class rapport_råkaffe:
                               SELECT [Placering] ,[Varenummer] ,NULL ,0
                               ,SUM([Kilo]) AS [Kilo]
                               FROM [dbo].[Newest total inventory]
-                              WHERE [Kontrakt] = '20-104' AND [Placering]  LIKE '2__'
+                              WHERE [Kontrakt] = '{req_reference_no}' AND [Placering]  LIKE '2__'
                               AND [Modtagelse] = '{req_modtagelse}'
                               GROUP BY [Placering] ,[Varenummer] 
                               END """
     df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
+    
+    # Get order numbers the requested coffee has been used in
+    query_probat_used_in_roast = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
+                           BEGIN
+                           SELECT [ORDER_NAME]
+                           FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                           WHERE [S_CONTRACT_NO] = '{req_reference_no}'
+                           GROUP BY [ORDER_NAME]
+                           END
+                           IF 'None' <> 'None' -- Modtagelse tastet
+                           BEGIN
+                           SELECT [ORDER_NAME]
+                           FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                           WHERE [S_CONTRACT_NO] = '{req_reference_no}'
+                           AND [S_DELIVERY_NAME] = '{req_modtagelse}'
+                           GROUP BY [ORDER_NAME]
+                           END """
+    df_probat_used_in_roast = pd.read_sql(query_probat_used_in_roast, con_probat)
+    # Convert orders to string for use in later queries
+    roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
+    sql_roast_orders = string_to_sql(roast_orders)
 
+    query_probat_roast_input = f""" IF 'None' = 'None'
+                                      BEGIN
+                                      SELECT [CUSTOMER_CODE] AS [Varenummer]
+                                      ,[ORDER_NAME] AS [Ordrenummer]
+                                      ,[DESTINATION] AS [Rister]
+                                      ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}'
+                                          THEN [WEIGHT] / 1000.0 ELSE 0 END) 
+                                          AS [Heraf kontrakt]
+                                      ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
+                                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                                      WHERE [ORDER_NAME] IN ({sql_roast_orders})
+                                      GROUP BY  [CUSTOMER_CODE] 
+                                      ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                                      ,[ORDER_NAME] ,[DESTINATION]
+                                      END
+                                      IF 'None' <> 'None'
+                                      BEGIN
+                                      SELECT [CUSTOMER_CODE] AS [Varenummer]
+                                      ,[ORDER_NAME] AS [Ordrenummer]
+                                      ,[DESTINATION] AS [Rister]
+                                      ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}' 
+                                           AND [S_DELIVERY_NAME] = '{req_modtagelse}'
+                                    	   THEN [WEIGHT] / 1000.0
+                                    	   ELSE 0 END) AS [Heraf kontrakt]
+                                      ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
+                                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                                      WHERE [ORDER_NAME] IN ({sql_roast_orders})
+                                      GROUP BY  [CUSTOMER_CODE]
+                                      ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                                      ,[ORDER_NAME] ,[DESTINATION] END """
+    if len(sql_roast_orders) > 0:
+        df_probat_roast_input = pd.read_sql(query_probat_roast_input, con_probat)
+    else:
+        df_probat_roast_input = pd.DataFrame()
+        
+    query_probat_roast_output = f""" SELECT	
+                                DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                            	,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
+                            	,SUM([WEIGHT]) / 1000.0 AS [Kilo ristet]
+                                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
+                                WHERE [ORDER_NAME] IN ({sql_roast_orders})
+                                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                                ,[DEST_NAME] ,[ORDER_NAME] """
+    if len(sql_roast_orders) > 0:
+        df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
+    else:
+        df_probat_roast_output = pd.DataFrame()
 
+    df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
+    df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
+                {'Kilo ristet':'sum',
+                 'Dato':','.join,
+                 'Silo':','.join}).reset_index()
+    print(df_probat_roast_output)
 
 
     # =============================================================================
@@ -391,7 +471,7 @@ class rapport_råkaffe:
     # =============================================================================
     section_id = 20
     section_name = get_section_name(section_id)
-    column_order = ['Placering','Dato','Varenummer','Varenavn','Kilo','Restlager']
+    column_order = ['Silo','Dato','Varenummer','Varenavn','Kilo','Restlager']
     columns_0_dec = ['Kilo','Restlager']
     if get_section_status_code(df_probat_processing) == 99:
         try:
@@ -399,7 +479,7 @@ class rapport_råkaffe:
             df_probat_processing['Dato'] = df_probat_processing['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_processing.fillna('', inplace=True)
             #Concat dates into one strng and sum numeric columns if they can be grouped
-            df_probat_processing = df_probat_processing.groupby(['Placering','Varenummer']).agg(
+            df_probat_processing = df_probat_processing.groupby(['Silo','Varenummer']).agg(
                 {'Kilo':'sum',
                  'Restlager':'sum',
                  'Dato':','.join}).reset_index()
@@ -414,6 +494,51 @@ class rapport_råkaffe:
             for col in columns_0_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
             df_temp_total = df_temp_total[column_order]
+            # Write results to Word and Excel
+            insert_dataframe_into_excel(df_temp_total, section_name, False)
+            add_section_to_word(df_temp_total, section_name, True, [-1,0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_temp_total))
+
+    # =============================================================================
+    # Section 5: Risteordrer
+    # =============================================================================
+    section_id = 5
+    section_name = get_section_name(section_id)
+    column_order = ['Varenummer','Varenavn','Dato','Rister','Ordrenummer','Silo',
+                    'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
+    columns_0_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
+    print(df_probat_roast_output)
+    if get_section_status_code(df_probat_roast_output) == 99:
+        try:
+            # Apply column formating for date column before concat
+            df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
+            df_probat_roast_output.fillna('', inplace=True)
+            #Concat dates into one strng and sum numeric columns if they can be grouped
+            df_probat_roast_output = df_probat_roast_output.groupby(['Varenummer','Ordrenummer','Rister']).agg(
+                {'Kilo råkaffe':'sum',
+                 'Heraf kontrakt':'sum',
+                 'Kilo ristet':'sum',
+                 'Dato':','.join,
+                 'Silo':','.join}).reset_index()
+            print(df_probat_roast_output)
+            df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].apply(lambda x: x.rstrip(','))
+            df_probat_roast_output['Varenavn'] = df_probat_roast_output['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
+            print(df_probat_roast_output)
+            # Create total for dataframe
+            dict_risteordrer_total = {'Kilo': [df_probat_roast_output['Kilo'].sum()],
+                                     'Restlager': [df_probat_roast_output['Restlager'].sum()]}
+            # Create temp dataframe including total
+            df_temp_total = pd.concat([df_probat_roast_output,
+                                       pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
+            for col in columns_0_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            df_temp_total = df_temp_total[column_order]
+            print(df_temp_total)
             # Write results to Word and Excel
             insert_dataframe_into_excel(df_temp_total, section_name, False)
             add_section_to_word(df_temp_total, section_name, True, [-1,0])

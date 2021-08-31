@@ -172,10 +172,12 @@ orders_related = []
 # =============================================================================
 # Update request that it is initiated and write into log
 # =============================================================================
-cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
-                  SET [Forespørgsel_igangsat] = getdate()
-                  WHERE [Id] = {req_id} """)
-cursor_04.commit()
+# =============================================================================
+# cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+#                   SET [Forespørgsel_igangsat] = getdate()
+#                   WHERE [Id] = {req_id} """)
+# cursor_04.commit()
+# =============================================================================
 # log_insert(script_name, f'Request id: {req_id} initiated')
 
 # =============================================================================
@@ -272,14 +274,54 @@ class rapport_råkaffe:
                              ,NULL AS [Restlager]
                              FROM [dbo].[PRO_EXP_REC_ARRIVE]
                              WHERE CAST([CONTRACT_NO] AS VARCHAR(20)) = '20-104'
-                             AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '1'
+                             AND CAST([DELIVERY_NAME] AS VARCHAR(20)) = '{req_modtagelse}'
                              UNION ALL
                              SELECT [Placering] ,NULL ,NULL ,SUM([Kilo]) AS [Kilo]
                              FROM [dbo].[Newest total inventory]
-                             WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '1'
+                             WHERE [Kontrakt] = '20-104' AND CAST([Modtagelse] AS VARCHAR(20)) = '{req_modtagelse}'
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
+
+    query_probat_processing = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
+                              BEGIN
+                              SELECT [DESTINATION] AS [Placering]
+                              ,[CUSTOMER_CODE] AS [Varenummer]
+                              ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
+                              ,SUM([WEIGHT] / 10.0) AS [Kilo]
+                              ,0 AS [Restlager]
+                              FROM [dbo].[PRO_EXP_REC_SUM_DEST]
+                              WHERE [CONTRACT_NO] = '20-104' AND [DESTINATION] LIKE '2__'
+                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
+                              ,[CUSTOMER_CODE]
+                              UNION ALL
+                              SELECT [Placering] ,[Varenummer] ,NULL ,0 ,SUM([Kilo])
+                              FROM [dbo].[Newest total inventory]
+                              WHERE [Kontrakt] = '20-104' AND [Placering]  LIKE '2__'
+                              GROUP BY [Placering] ,[Varenummer]
+                              END
+                              IF 'None' <> 'None' -- Modtagelse tastet
+                              BEGIN
+                              SELECT [DESTINATION] AS [Placering]
+                              ,[CUSTOMER_CODE] AS [Varenummer]
+                              ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
+                              ,SUM([WEIGHT] / 10.0) AS [Kilo]
+                              ,0 AS [Restlager]
+                              FROM [dbo].[PRO_EXP_REC_SUM_DEST]
+                              WHERE [CONTRACT_NO] = '20-104'
+                              AND [DESTINATION] LIKE '2__'
+                              AND [DELIVERY_NAME] = '{req_modtagelse}'
+                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
+                              ,[CUSTOMER_CODE]
+                              UNION ALL
+                              SELECT [Placering] ,[Varenummer] ,NULL ,0
+                              ,SUM([Kilo]) AS [Kilo]
+                              FROM [dbo].[Newest total inventory]
+                              WHERE [Kontrakt] = '20-104' AND [Placering]  LIKE '2__'
+                              AND [Modtagelse] = '{req_modtagelse}'
+                              GROUP BY [Placering] ,[Varenummer] 
+                              END """
+    df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
 
 
 
@@ -327,7 +369,7 @@ class rapport_råkaffe:
             dict_modtagelse_total = {'Kilo': [df_probat_receiving['Kilo'].sum()],
                                      'Restlager': [df_probat_receiving['Restlager'].sum()]}
             # Create temp dataframe including total
-            df_temp_total = pd.concat([df_probat_receiving, 
+            df_temp_total = pd.concat([df_probat_receiving,
                                        pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
             # Apply column formating
             df_temp_total['Dato'] = df_temp_total['Dato'].dt.strftime('%d-%m-%Y')
@@ -344,6 +386,43 @@ class rapport_råkaffe:
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
 
+    # =============================================================================
+    # Section 20: Rensning
+    # =============================================================================
+    section_id = 20
+    section_name = get_section_name(section_id)
+    column_order = ['Placering','Dato','Varenummer','Varenavn','Kilo','Restlager']
+    columns_0_dec = ['Kilo','Restlager']
+    if get_section_status_code(df_probat_processing) == 99:
+        try:
+            # Apply column formating for date column before concat
+            df_probat_processing['Dato'] = df_probat_processing['Dato'].dt.strftime('%d-%m-%Y')
+            df_probat_processing.fillna('', inplace=True)
+            #Concat dates into one strng and sum numeric columns if they can be grouped
+            df_probat_processing = df_probat_processing.groupby(['Placering','Varenummer']).agg(
+                {'Kilo':'sum',
+                 'Restlager':'sum',
+                 'Dato':','.join}).reset_index()
+            df_probat_processing['Dato'] = df_probat_processing['Dato'].apply(lambda x: x.rstrip(','))
+            df_probat_processing['Varenavn'] = df_probat_processing['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
+            # Create total for dataframe
+            dict_modtagelse_total = {'Kilo': [df_probat_processing['Kilo'].sum()],
+                                     'Restlager': [df_probat_processing['Restlager'].sum()]}
+            # Create temp dataframe including total
+            df_temp_total = pd.concat([df_probat_processing,
+                                       pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
+            for col in columns_0_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            df_temp_total = df_temp_total[column_order]
+            # Write results to Word and Excel
+            insert_dataframe_into_excel(df_temp_total, section_name, False)
+            add_section_to_word(df_temp_total, section_name, True, [-1,0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 
 

@@ -877,6 +877,20 @@ if get_section_status_code(df_probat_ulg) == 99:
         # Look up column values and string format datecolumn for export
         df_probat_ulg['Receptnavn'] = df_probat_ulg['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
+        # Join multiple dates or silos to one commaseparated string
+        df_probat_ulg = df_probat_ulg.groupby(['Receptnummer', 'Receptnavn', 
+                                               'Mølle','Probat id', 'Ordrenummer']).agg(
+                                                   {'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                                                    'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                                                    'Mølle': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                                                    'Kilo': 'sum'
+                                                   }).reset_index()
+        df_probat_ulg['Dato'] = df_probat_ulg['Dato'].apply(lambda x: x.rstrip(','))
+        df_probat_ulg['Dato'] = df_probat_ulg['Dato'].apply(lambda x: x.lstrip(','))
+        df_probat_ulg['Silo'] = df_probat_ulg['Silo'].apply(lambda x: x.rstrip(','))
+        df_probat_ulg['Silo'] = df_probat_ulg['Silo'].apply(lambda x: x.lstrip(','))
+        df_probat_ulg['Mølle'] = df_probat_ulg['Mølle'].apply(lambda x: x.rstrip(','))
+        df_probat_ulg['Mølle'] = df_probat_ulg['Mølle'].apply(lambda x: x.lstrip(','))
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulg, pd.DataFrame.from_dict(data=dict_mølle_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
@@ -910,6 +924,17 @@ if get_section_status_code(df_probat_ulr) == 99:
         # Look up column values and string format datecolumn for export
         df_probat_ulr['Receptnavn'] = df_probat_ulr['Receptnummer'].apply(get_nav_item_info, field='Beskrivelse')
         df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
+        # Join multiple dates or silos to one commaseparated string
+        df_probat_ulr = df_probat_ulr.groupby(['Receptnummer', 'Receptnavn', 
+                                               'Rister','Probat id', 'Ordrenummer']).agg(
+                                                   {'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                                                    'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                                                    'Kilo': 'sum'
+                                                   }).reset_index()
+        df_probat_ulr['Dato'] = df_probat_ulr['Dato'].apply(lambda x: x.rstrip(','))
+        df_probat_ulr['Dato'] = df_probat_ulr['Dato'].apply(lambda x: x.lstrip(','))
+        df_probat_ulr['Silo'] = df_probat_ulr['Silo'].apply(lambda x: x.rstrip(','))
+        df_probat_ulr['Silo'] = df_probat_ulr['Silo'].apply(lambda x: x.lstrip(','))
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulr, pd.DataFrame.from_dict(data=dict_rister_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]

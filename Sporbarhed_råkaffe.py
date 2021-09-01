@@ -398,14 +398,6 @@ class rapport_råkaffe:
     else:
         df_probat_roast_output = pd.DataFrame()
 
-    df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
-    df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
-                {'Kilo ristet': 'sum',
-                 'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
-                 'Silo': ','.join}).reset_index()
-    print(df_probat_roast_output['Dato'])
-
-
     # =============================================================================
     # Section 1: Generelt
     # =============================================================================
@@ -480,9 +472,10 @@ class rapport_råkaffe:
             df_probat_processing.fillna('', inplace=True)
             #Concat dates into one strng and sum numeric columns if they can be grouped
             df_probat_processing = df_probat_processing.groupby(['Silo','Varenummer']).agg(
-                {'Kilo':'sum',
-                 'Restlager':'sum',
-                 'Dato':','.join}).reset_index()
+                {'Kilo': 'sum',
+                 'Restlager': 'sum',
+                 'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
+                 }).reset_index()
             df_probat_processing['Dato'] = df_probat_processing['Dato'].apply(lambda x: x.rstrip(','))
             df_probat_processing['Varenavn'] = df_probat_processing['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
             # Create total for dataframe
@@ -512,28 +505,35 @@ class rapport_råkaffe:
     column_order = ['Varenummer','Varenavn','Dato','Rister','Ordrenummer','Silo',
                     'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
     columns_0_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
-    print(df_probat_roast_output)
+
     if get_section_status_code(df_probat_roast_output) == 99:
         try:
             # Apply column formating for date column before concat
             df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_roast_output.fillna('', inplace=True)
             #Concat dates into one strng and sum numeric columns if they can be grouped
-            df_probat_roast_output = df_probat_roast_output.groupby(['Varenummer','Ordrenummer','Rister']).agg(
-                {'Kilo råkaffe':'sum',
-                 'Heraf kontrakt':'sum',
-                 'Kilo ristet':'sum',
-                 'Dato':','.join,
-                 'Silo':','.join}).reset_index()
-            print(df_probat_roast_output)
-            df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].apply(lambda x: x.rstrip(','))
-            df_probat_roast_output['Varenavn'] = df_probat_roast_output['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
-            print(df_probat_roast_output)
+            df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
+                {'Kilo ristet': 'sum',
+                 'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                 'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
+                 }).reset_index()
+            df_probat_roast_total = pd.merge(df_probat_roast_input, 
+                                             df_probat_roast_output,
+                                             left_on = 'Ordrenummer', 
+                                             right_on = 'Ordrenummer',
+                                             how = 'left',
+                                             suffixes = ('' ,'_R')
+                                             )
+            print(df_probat_roast_total)
+            df_probat_roast_total['Dato'] = df_probat_roast_total['Dato'].apply(lambda x: x.rstrip(','))
+            df_probat_roast_total['Varenavn'] = df_probat_roast_total['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
+            print(df_probat_roast_total)
             # Create total for dataframe
-            dict_risteordrer_total = {'Kilo': [df_probat_roast_output['Kilo'].sum()],
-                                     'Restlager': [df_probat_roast_output['Restlager'].sum()]}
+            dict_risteordrer_total = {'Kilo': [df_probat_roast_total['Kilo'].sum()],
+                                     'Restlager': [df_probat_roast_total['Restlager'].sum()]
+                                     }
             # Create temp dataframe including total
-            df_temp_total = pd.concat([df_probat_roast_output,
+            df_temp_total = pd.concat([df_probat_roast_total,
                                        pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
             for col in columns_0_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))

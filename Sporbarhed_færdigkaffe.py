@@ -879,7 +879,7 @@ if get_section_status_code(df_probat_ulg) == 99:
         df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
         # Join multiple dates or silos to one commaseparated string
         df_probat_ulg = df_probat_ulg.groupby(['Receptnummer', 'Receptnavn', 
-                                               'Mølle','Probat id', 'Ordrenummer']).agg(
+                                               'Probat id', 'Ordrenummer']).agg(
                                                    {'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                     'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                     'Mølle': lambda x: ','.join(sorted(pd.Series.unique(x))),

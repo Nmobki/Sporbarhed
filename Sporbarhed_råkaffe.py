@@ -327,72 +327,100 @@ class rapport_råkaffe:
     
     # Get order numbers the requested coffee has been used in
     query_probat_used_in_roast = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
-                           BEGIN
-                           SELECT [ORDER_NAME]
-                           FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                           WHERE [S_CONTRACT_NO] = '{req_reference_no}'
-                           GROUP BY [ORDER_NAME]
-                           END
-                           IF 'None' <> 'None' -- Modtagelse tastet
-                           BEGIN
-                           SELECT [ORDER_NAME]
-                           FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                           WHERE [S_CONTRACT_NO] = '{req_reference_no}'
-                           AND [S_DELIVERY_NAME] = '{req_modtagelse}'
-                           GROUP BY [ORDER_NAME]
-                           END """
+                               BEGIN
+                               SELECT [ORDER_NAME]
+                               FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                               WHERE [S_CONTRACT_NO] = '{req_reference_no}'
+                               GROUP BY [ORDER_NAME]
+                               END
+                               IF 'None' <> 'None' -- Modtagelse tastet
+                               BEGIN
+                               SELECT [ORDER_NAME]
+                               FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                               WHERE [S_CONTRACT_NO] = '{req_reference_no}'
+                               AND [S_DELIVERY_NAME] = '{req_modtagelse}'
+                               GROUP BY [ORDER_NAME]
+                               END """
     df_probat_used_in_roast = pd.read_sql(query_probat_used_in_roast, con_probat)
     # Convert orders to string for use in later queries
     roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
     sql_roast_orders = string_to_sql(roast_orders)
-
+    # Green coffee used for roasting
     query_probat_roast_input = f""" IF 'None' = 'None'
-                                      BEGIN
-                                      SELECT [CUSTOMER_CODE] AS [Varenummer]
-                                      ,[ORDER_NAME] AS [Ordrenummer]
-                                      ,[DESTINATION] AS [Rister]
-                                      ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}'
-                                          THEN [WEIGHT] / 1000.0 ELSE 0 END) 
-                                          AS [Heraf kontrakt]
-                                      ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
-                                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                                      WHERE [ORDER_NAME] IN ({sql_roast_orders})
-                                      GROUP BY  [CUSTOMER_CODE] 
-                                      ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                                      ,[ORDER_NAME] ,[DESTINATION]
-                                      END
-                                      IF 'None' <> 'None'
-                                      BEGIN
-                                      SELECT [CUSTOMER_CODE] AS [Varenummer]
-                                      ,[ORDER_NAME] AS [Ordrenummer]
-                                      ,[DESTINATION] AS [Rister]
-                                      ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}' 
-                                           AND [S_DELIVERY_NAME] = '{req_modtagelse}'
-                                    	   THEN [WEIGHT] / 1000.0
-                                    	   ELSE 0 END) AS [Heraf kontrakt]
-                                      ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
-                                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                                      WHERE [ORDER_NAME] IN ({sql_roast_orders})
-                                      GROUP BY  [CUSTOMER_CODE]
-                                      ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                                      ,[ORDER_NAME] ,[DESTINATION] END """
+                                BEGIN
+                                SELECT [CUSTOMER_CODE] AS [Varenummer]
+                                ,[ORDER_NAME] AS [Ordrenummer]
+                                ,[DESTINATION] AS [Rister]
+                                ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}'
+                                    THEN [WEIGHT] / 1000.0 ELSE 0 END) 
+                                    AS [Heraf kontrakt]
+                                ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
+                                FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                                WHERE [ORDER_NAME] IN ({sql_roast_orders})
+                                GROUP BY  [CUSTOMER_CODE] 
+                                ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                                ,[ORDER_NAME] ,[DESTINATION]
+                                END
+                                IF 'None' <> 'None'
+                                BEGIN
+                                SELECT [CUSTOMER_CODE] AS [Varenummer]
+                                ,[ORDER_NAME] AS [Ordrenummer]
+                                ,[DESTINATION] AS [Rister]
+                                ,SUM(CASE WHEN [S_CONTRACT_NO] = '{req_reference_no}' 
+                                     AND [S_DELIVERY_NAME] = '{req_modtagelse}'
+                              	   THEN [WEIGHT] / 1000.0
+                              	   ELSE 0 END) AS [Heraf kontrakt]
+                                ,SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
+                                FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                                WHERE [ORDER_NAME] IN ({sql_roast_orders})
+                                GROUP BY  [CUSTOMER_CODE]
+                                ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                                ,[ORDER_NAME] ,[DESTINATION] END """
+    # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
         df_probat_roast_input = pd.read_sql(query_probat_roast_input, con_probat)
     else:
         df_probat_roast_input = pd.DataFrame()
-        
+    # Output from roasters
     query_probat_roast_output = f""" SELECT	
                                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                            	,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
-                            	,SUM([WEIGHT]) / 1000.0 AS [Kilo ristet]
+                                ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
+                                ,SUM([WEIGHT]) / 1000.0 AS [Kilo ristet]
                                 FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
                                 WHERE [ORDER_NAME] IN ({sql_roast_orders})
                                 GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                                 ,[DEST_NAME] ,[ORDER_NAME] """
+    # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
         df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
     else:
         df_probat_roast_output = pd.DataFrame()
+    # Read grinding orders form Probat
+    query_probat_grinding = f""" WITH LG AS (
+                        	SELECT [ORDER_NAME] AS [Ordrenummer]
+                        	,[CUSTOMER_CODE] AS [Varenummer]
+                        	,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                        	,[DESTINATION] AS [Mølle]
+                        	FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                        	WHERE [ORDER_NAME] IS NOT NULL
+                            AND [S_ORDER_NAME] IN ({sql_roast_orders})
+                        	GROUP BY [ORDER_NAME],[CUSTOMER_CODE]
+                        	,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                        	,[DESTINATION] )
+                            ,ULG AS (
+                        	SELECT [ORDER_NAME],SUM([WEIGHT] / 1000.0) AS [Kilo]
+                        	FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                        	GROUP BY [ORDER_NAME] )
+                            SELECT LG.[Dato],LG.[Mølle],LG.[Ordrenummer]
+                        	,LG.[Varenummer],ULG.[Kilo]
+                            FROM LG
+                            INNER JOIN ULG
+                            	ON LG.[Ordrenummer] = ULG.[ORDER_NAME] """
+    # Only try to read query if any orders exist
+    if len(sql_roast_orders) > 0:
+            df_probat_grinding = pd.read_sql(query_probat_grinding, con_probat)
+    else:
+        df_probat_grinding = pd.DataFrame()   
 
     # =============================================================================
     # Section 1: Generelt
@@ -452,7 +480,7 @@ class rapport_råkaffe:
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        section_log_insert(section_id, get_section_status_code(df_temp_total))
+        section_log_insert(section_id, get_section_status_code(df_probat_receiving))
 
     # =============================================================================
     # Section 20: Rensning
@@ -491,7 +519,7 @@ class rapport_råkaffe:
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        section_log_insert(section_id, get_section_status_code(df_temp_total))
+        section_log_insert(section_id, get_section_status_code(df_probat_processing))
 
     # =============================================================================
     # Section 5: Risteordrer
@@ -547,7 +575,7 @@ class rapport_råkaffe:
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        section_log_insert(section_id, get_section_status_code(df_temp_total))
+        section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
 
 
 

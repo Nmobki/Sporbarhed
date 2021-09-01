@@ -538,6 +538,7 @@ class rapport_råkaffe:
             for col in columns_0_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
             df_temp_total = df_temp_total[column_order]
+            df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
             # Write results to Word and Excel
             insert_dataframe_into_excel(df_temp_total, section_name, False)
             add_section_to_word(df_temp_total, section_name, True, [-1,0])

@@ -400,10 +400,10 @@ class rapport_råkaffe:
 
     df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
     df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
-                {'Kilo ristet':'sum',
-                 'Dato':','.join,
-                 'Silo':','.join}).reset_index()
-    print(df_probat_roast_output)
+                {'Kilo ristet': 'sum',
+                 'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                 'Silo': ','.join}).reset_index()
+    print(df_probat_roast_output['Dato'])
 
 
     # =============================================================================

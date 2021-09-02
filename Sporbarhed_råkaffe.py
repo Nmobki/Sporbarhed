@@ -244,7 +244,7 @@ class rapport_råkaffe:
                         WHERE PL.[Type] = 2
                             AND PL.[Document No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
-    
+
     # Get timestamp for last export of inventory from Probat
     query_probat_inventory_timestamp = """ WITH [Tables] AS (
                                        SELECT MAX([RECORDING_DATE]) AS [Date]
@@ -255,7 +255,7 @@ class rapport_råkaffe:
                                         SELECT MIN([Date]) AS [Silobeholdning eksporteret]
                                         FROM [Tables] """
     df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
-    
+
     # Information from Probat for the receiving of coffee
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
                              BEGIN
@@ -287,7 +287,7 @@ class rapport_råkaffe:
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
-    
+
     # Information from Probat for the processing of coffee
     query_probat_processing = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
                               BEGIN
@@ -324,7 +324,7 @@ class rapport_råkaffe:
                               GROUP BY [Placering]
                               END """
     df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
-    
+
     # Get order numbers the requested coffee has been used in
     query_probat_used_in_roast = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
                                BEGIN
@@ -382,7 +382,7 @@ class rapport_råkaffe:
     else:
         df_probat_roast_input = pd.DataFrame()
     # Output from roasters
-    query_probat_roast_output = f""" SELECT	
+    query_probat_roast_output = f""" SELECT
                                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                                 ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
                                 ,SUM([WEIGHT]) / 1000.0 AS [Kilo ristet]
@@ -395,32 +395,40 @@ class rapport_råkaffe:
         df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
     else:
         df_probat_roast_output = pd.DataFrame()
+
     # Read grinding orders form Probat
-    query_probat_grinding = f""" WITH LG AS (
-                        	SELECT [ORDER_NAME] AS [Ordrenummer]
-                        	,[CUSTOMER_CODE] AS [Varenummer]
-                        	,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                        	,[DESTINATION] AS [Mølle]
-                        	FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
-                        	WHERE [ORDER_NAME] IS NOT NULL
-                            AND [S_ORDER_NAME] IN ({sql_roast_orders})
-                        	GROUP BY [ORDER_NAME],[CUSTOMER_CODE]
-                        	,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                        	,[DESTINATION] )
-                            ,ULG AS (
-                        	SELECT [ORDER_NAME],SUM([WEIGHT] / 1000.0) AS [Kilo]
-                        	FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                        	GROUP BY [ORDER_NAME] )
-                            SELECT LG.[Dato],LG.[Mølle],LG.[Ordrenummer]
-                        	,LG.[Varenummer],ULG.[Kilo]
-                            FROM LG
-                            INNER JOIN ULG
-                            	ON LG.[Ordrenummer] = ULG.[ORDER_NAME] """
+    query_probat_grinding_input = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
+                            	  ,[CUSTOMER_CODE] AS [Varenummer]
+                            	  ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                            	  ,[DESTINATION] AS [Mølle]
+                            	  FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                            	  WHERE [S_ORDER_NAME] IN ({sql_roast_orders})
+                            	  GROUP BY [ORDER_NAME],[CUSTOMER_CODE]
+                            	  ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                            	  ,[DESTINATION] """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
-            df_probat_grinding = pd.read_sql(query_probat_grinding, con_probat)
+            df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
     else:
-        df_probat_grinding = pd.DataFrame()   
+        df_probat_grinding_input = pd.DataFrame()
+
+    # Convert orders to string for use in grinder output query
+    grinder_orders = df_probat_grinding_input['Ordrenummer'].unique().tolist()
+    sql_grinder_orders = string_to_sql(grinder_orders)
+
+    # Get output from grinders
+    query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
+                                   ,SUM([WEIGHT] / 1000.0) AS [Kilo]
+                                   ,[DEST_NAME] AS [Silo]
+                                   FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                                   WHERE [ORDER_NAME] IN ({sql_grinder_orders})
+                                   GROUP BY [ORDER_NAME],[DEST_NAME] """
+    # Only try to read query if any orders exist
+    if len(sql_grinder_orders) > 0:
+            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
+    else:
+        df_probat_grinding_output = pd.DataFrame()
+
 
     # =============================================================================
     # Section 1: Generelt
@@ -457,7 +465,7 @@ class rapport_råkaffe:
     section_id = 21
     section_name = get_section_name(section_id)
     column_order = ['Placering','Dato','Kilo','Restlager']
-    columns_0_dec = ['Kilo','Restlager']
+    columns_1_dec = ['Kilo','Restlager']
 
     if get_section_status_code(df_probat_receiving) == 99:
         try:
@@ -469,8 +477,8 @@ class rapport_råkaffe:
                                        pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
             # Apply column formating
             df_temp_total['Dato'] = df_temp_total['Dato'].dt.strftime('%d-%m-%Y')
-            for col in columns_0_dec:
-                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
             # Write results to Word and Excel
             insert_dataframe_into_excel(df_temp_total, section_name, False)
@@ -488,7 +496,7 @@ class rapport_råkaffe:
     section_id = 20
     section_name = get_section_name(section_id)
     column_order = ['Silo','Dato','Kilo','Restlager']
-    columns_0_dec = ['Kilo','Restlager']
+    columns_1_dec = ['Kilo','Restlager']
     if get_section_status_code(df_probat_processing) == 99:
         try:
             # Apply column formating for date column before concat
@@ -508,8 +516,8 @@ class rapport_råkaffe:
             # Create temp dataframe including total
             df_temp_total = pd.concat([df_probat_processing,
                                        pd.DataFrame.from_dict(data=dict_modtagelse_total, orient = 'columns')])
-            for col in columns_0_dec:
-                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
             # Write results to Word and Excel
             insert_dataframe_into_excel(df_temp_total, section_name, False)
@@ -528,13 +536,12 @@ class rapport_råkaffe:
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Dato','Rister','Ordrenummer','Silo',
                     'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
-    columns_0_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
+    columns_1_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
 
     if get_section_status_code(df_probat_roast_output) == 99:
         try:
             # Apply column formating for date column before concat
             df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
-            df_probat_roast_output.fillna('', inplace=True)
             # Concat dates into one strng and sum numeric columns if they can be grouped
             df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
                 {'Kilo ristet': 'sum',
@@ -542,9 +549,9 @@ class rapport_råkaffe:
                  'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
                  }).reset_index()
             # Join roast output to input for one table
-            df_probat_roast_total = pd.merge(df_probat_roast_input, 
+            df_probat_roast_total = pd.merge(df_probat_roast_input,
                                              df_probat_roast_output,
-                                             left_on = 'Ordrenummer', 
+                                             left_on = 'Ordrenummer',
                                              right_on = 'Ordrenummer',
                                              how = 'left',
                                              suffixes = ('' ,'_R')
@@ -563,8 +570,8 @@ class rapport_råkaffe:
             df_total_temp = pd.DataFrame([dict_risteordrer_total])
             df_temp_total = pd.concat([df_probat_roast_total,
                                    pd.DataFrame([dict_risteordrer_total])])
-            for col in columns_0_dec:
-                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_0'))
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
             # Write results to Word and Excel
@@ -576,6 +583,147 @@ class rapport_råkaffe:
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
+
+
+    # =============================================================================
+    # Section 4: Mølleordrer
+    # =============================================================================
+    section_id = 4
+    section_name = get_section_name(section_id)
+    column_order = ['Varenummer','Varenavn','Dato','Silo','Kilo']
+    columns_1_dec = ['Kilo']
+
+    if get_section_status_code(df_probat_grinding_input) == 99:
+        try:
+            # Apply column formating for date column before concat
+            df_probat_grinding_input['Dato'] = df_probat_grinding_input['Dato'].dt.strftime('%d-%m-%Y')
+            # Concat dates into one strng and sum numeric columns if they can be grouped
+            df_probat_grinding_input = df_probat_grinding_input.groupby(['Ordrenummer','Varenummer','Mølle']).agg(
+                {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
+                }).reset_index()
+            df_probat_grinding_output = df_probat_grinding_output.groupby('Ordrenummer').agg(
+                {'Kilo': 'sum',
+                 'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
+                }).reset_index()
+            # Join roast output to input for one table
+            df_probat_grinding_total = pd.merge(df_probat_grinding_input,
+                                             df_probat_grinding_output,
+                                             left_on = 'Ordrenummer',
+                                             right_on = 'Ordrenummer',
+                                             how = 'left',
+                                             suffixes = ('' ,'_R')
+                                             )
+            #Column formating and lookups
+            df_probat_grinding_total['Dato'] = df_probat_grinding_total['Dato'].apply(lambda x: x.rstrip(','))
+            df_probat_grinding_total['Dato'] = df_probat_grinding_total['Dato'].apply(lambda x: x.lstrip(','))
+            df_probat_grinding_total['Silo'] = df_probat_grinding_total['Silo'].apply(lambda x: x.rstrip(','))
+            df_probat_grinding_total['Silo'] = df_probat_grinding_total['Silo'].apply(lambda x: x.lstrip(','))
+            df_probat_grinding_total['Varenavn'] = df_probat_grinding_total['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
+            # Create total for dataframe
+            dict_mølleordrer_total = {'Kilo': df_probat_grinding_total['Kilo'].sum()}
+
+            # Create temp dataframe including total
+            df_total_temp = pd.DataFrame([dict_mølleordrer_total])
+            df_temp_total = pd.concat([df_probat_grinding_total,
+                                   pd.DataFrame([dict_mølleordrer_total])])
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
+            df_temp_total = df_temp_total[column_order]
+            df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
+            # Write results to Word and Excel
+            insert_dataframe_into_excel(df_temp_total, section_name, False)
+            add_section_to_word(df_temp_total, section_name, True, [-1,0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
+
+
+
+
+
+
+
+
+
+    # =============================================================================
+    # Section 8: Massebalance
+    # =============================================================================
+    section_id = 8
+    section_name = get_section_name(section_id)
+    columns_1_dec = ['[1] Kontrakt','[2] Renset','[3] Restlager','[4] Difference','[5] Difference pct','[6] Anvendt til produktion',
+                     '[7] Difference','[8] Difference pct','[9] Ristet kaffe','[10] Difference','[11] Difference pct',
+                     '[12] Færdigvareproduktion','[13] Difference','[14] Difference pct','[15] Salg','[16] Regulering & ompak',
+                     '[17] Restlager','[18] Difference','[19] Difference pct']
+    columns_2_pct = []
+    
+    dict_massebalance = {'[1] Kontrakt': df_probat_receiving['Kilo'].sum(),
+                         '[2] Renset': df_probat_processing['Kilo'].sum(),
+                         '[3] Restlager': df_probat_processing['Restlager'].sum(),
+                         '[4] Difference': None,
+                         '[5] Difference pct': None,
+                         '[6] Anvendt til produktion': df_probat_roast_total['Heraf kontrakt'].sum(),
+                         '[7] Difference': None,
+                         '[8] Difference pct': None,
+                         '[9] Ristet kaffe': df_probat_roast_total['Kilo ristet'].sum(),
+                         '[10] Difference': None,
+                         '[11] Difference pct': None,
+                         '[12] Færdigvareproduktion': 99999,
+                         '[13] Difference': None,
+                         '[14] Difference pct': None,
+                         '[15] Salg': 99999,
+                         '[16] Regulering & ompak': 99999,
+                         '[17] Restlager': 99999,
+                         '[18] Difference': None,
+                         '[19] Difference pct': None
+                        }
+    
+    #Number formating
+    for col in columns_1_dec:
+        dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')
+    for col in columns_2_pct:
+        dict_massebalance[col] = number_format(dict_massebalance[col] ,'pct_2')
+    
+    df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
+    df_massebalance.columns = ['Sektion','Værdi']
+    df_massebalance['Note'] = [None,None,None,'[1]-[2]-[3]','[4]/[1]',None,'[2]-[3]-[6]','[7]/([2]-[3])',None,
+                               '[2]-[3]-[9]','[10]/([2]-[3])',None,'[9]-[12]','[13]/([9]-[12])',None,None,None,
+                               '[12]-[15]-[16]-[17]','[18]/[12]']
+    df_massebalance['Bemærkning'] = None
+    
+    if get_section_status_code(df_massebalance) == 99:
+        try:
+            # Write results to Word and Excel
+            insert_dataframe_into_excel (df_massebalance, section_name, True)
+            add_section_to_word(df_massebalance, section_name, True, [0,4,5,7,8,10,11,13,14,18,19])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_massebalance))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

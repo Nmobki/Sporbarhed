@@ -428,7 +428,128 @@ class rapport_råkaffe:
             df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
     else:
         df_probat_grinding_output = pd.DataFrame()
-
+    
+    # Get order relations from Probat for finished goods if possible
+    query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
+                          BEGIN
+                          -- Formalet kaffe
+                          SELECT PG.[ORDER_NAME] AS [Ordrenummer],PG.[S_ORDER_NAME] AS [Relateret ordre],'Probat formalet pakkelinje' AS [Kilde]
+                          FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_LOAD_G] AS LG
+                        	ON LR.[ORDER_NAME] = LG.[S_ORDER_NAME]
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_SEND_PG] AS PG
+                        	ON LG.[ORDER_NAME] = PG.[S_ORDER_NAME]
+                          WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                        	AND PG.[ORDER_NAME] <> ''
+                          GROUP BY PG.[ORDER_NAME],PG.[S_ORDER_NAME]                      	
+                          UNION ALL
+                          -- Helbønne
+                          SELECT PB.[ORDER_NAME] AS [Ordrenummer],PB.[S_ORDER_NAME] AS [Relateret ordre],'Probat helbønne pakkelinje'
+                          FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_SEND_PB] AS PB
+                        	ON LR.[ORDER_NAME] = PB.[S_ORDER_NAME]
+                          WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                        	AND PB.[ORDER_NAME] <> ''
+                          GROUP BY PB.[ORDER_NAME],PB.[S_ORDER_NAME]
+                          END
+                          IF 'None' <> 'None' -- Modtagelse defineret
+                          BEGIN
+                          -- Formalet kaffe
+                          SELECT PG.[ORDER_NAME] AS [Ordrenummer],PG.[S_ORDER_NAME] AS [Relateret ordre],'Probat formalet pakkelinje' AS [Kilde]
+                          FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_LOAD_G] AS LG
+                        	ON LR.[ORDER_NAME] = LG.[S_ORDER_NAME]
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_SEND_PG] AS PG
+                        	ON LG.[ORDER_NAME] = PG.[S_ORDER_NAME]
+                          WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                        	AND LR.[S_DELIVERY_NAME] = '{req_modtagelse}'
+                        	AND PG.[ORDER_NAME] <> ''
+                          GROUP BY PG.[ORDER_NAME],PG.[S_ORDER_NAME]
+                          UNION ALL
+                          -- Helbønne
+                          SELECT PB.[ORDER_NAME] AS [Ordrenummer],PB.[S_ORDER_NAME] AS [Relateret ordre],'Probat helbønne pakkelinje'
+                          FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                          INNER JOIN [dbo].[PRO_EXP_ORDER_SEND_PB] AS PB
+                        	ON LR.[ORDER_NAME] = PB.[S_ORDER_NAME]
+                          WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                        	AND LR.[S_DELIVERY_NAME] = '{req_modtagelse}'
+                        	AND PB.[ORDER_NAME] <> ''
+                          GROUP BY PB.[ORDER_NAME],PB.[S_ORDER_NAME]
+                          END """
+    df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
+ 
+    # Join previous found orders to one list for query below
+    sql_related_orders = string_to_sql(roast_orders + grinder_orders)
+    # Get related orders from Navision
+    query_nav_order_related = f""" SELECT [Prod_ Order No_] AS [Ordrenummer] 
+                               ,[Reserved Prod_ Order No_] AS [Relateret ordre]
+                               ,'Navision reservationer' AS [Kilde]
+                               FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
+                               WHERE [Reserved Prod_ Order No_] IN 
+                               ({sql_related_orders})"""
+    df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
+    
+    # Get list of orders and append to lists if they do not already exist
+    # Merge Probat and NAV orders before merging
+    nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
+    nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
+    probat_orders_top = df_probat_orders['Ordrenummer'].unique().tolist()
+    probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
+    temp_orders_top = probat_orders_top + nav_orders_top
+    temp_orders_related = probat_orders_related + nav_orders_related
+    
+    # If order doesn't exist in list, append:
+    for order in temp_orders_top:
+        if order not in  orders_top_level and order != '':
+            orders_top_level.append(order)
+    
+    for order in temp_orders_related:
+        if order not in orders_related:
+            orders_related.append(order)
+    # String used for querying Navision, only finished goods
+    req_orders_total = string_to_sql(orders_top_level) 
+    
+    print(req_orders_total)
+    # Recursive query to find all relevant produced orders related to the requested order
+    # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
+    # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
+    # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
+    query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                                  WHERE [Order No_] IN ({req_orders_total})
+                                  AND [Entry Type] = 6
+                                  UNION ALL
+                                  SELECT ILE_O.[Lot No_]
+                                  FROM [LOT_ORG]
+                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
+                                      ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
+                                      AND [ILE_C].[Entry Type] IN (5,8)
+                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
+                                	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
+                                      AND ILE_O.[Entry Type] IN (6,9) )
+                                  ,[LOT_SINGLE] AS ( SELECT [Lot No_]
+                                  FROM [LOT_ORG] GROUP BY [Lot No_] )
+                                  SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]
+                            	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
+                            		THEN ILE.[Quantity] * I.[Net Weight]
+                            		ELSE 0 END) AS [Produceret]
+                            	,SUM(CASE WHEN ILE.[Entry Type] = 1
+                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                            		ELSE 0 END) AS [Salg]
+                            	,SUM(CASE WHEN ILE.[Entry Type] NOT IN (0,1,6,9)
+                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                            		ELSE 0 END) AS [Regulering & ompak]
+                            	,SUM(ILE.[Remaining Quantity] * I.[Net Weight]) AS [Restlager]
+                                FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                                INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
+                                	ON ILE.[Item No_] = I.[No_]
+                                INNER JOIN [LOT_SINGLE]
+                                	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
+                                GROUP BY ILE.[Item No_],I.[Description] """
+    print(query_nav_færdigvaretilgang)
+    df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
+    print(df_nav_færdigvaretilgang)
+   
 
     # =============================================================================
     # Section 1: Generelt
@@ -640,7 +761,37 @@ class rapport_råkaffe:
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
 
-
+    # =============================================================================
+    # Section 3: Færdigvaretilgang
+    # =============================================================================
+    section_id = 3
+    section_name = get_section_name(section_id)
+    column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
+    columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
+    
+    if get_section_status_code(df_nav_færdigvaretilgang) == 99:
+        try:
+            # Create total for dataframe
+            dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
+                                     'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
+                                     'Restlager': [df_nav_færdigvaretilgang['Restlager'].sum()],
+                                     'Regulering & ompak': [df_nav_færdigvaretilgang['Regulering & ompak'].sum()]}
+            df_temp_total = pd.concat([df_nav_færdigvaretilgang,
+                                      pd.DataFrame.from_dict(data=dict_færdigvare_total, orient='columns')])
+            df_temp_total = df_temp_total[column_order]
+            df_temp_total.sort_values(by=['Varenummer'], inplace=True)
+            # Data formating
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
+            # Write results to Word and Excel
+            insert_dataframe_into_excel (df_temp_total, section_name, False)
+            add_section_to_word(df_temp_total, section_name, True, [-1,0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_temp_total))
 
 
 
@@ -653,11 +804,10 @@ class rapport_råkaffe:
     # =============================================================================
     section_id = 8
     section_name = get_section_name(section_id)
-    columns_1_dec = ['[1] Kontrakt','[2] Renset','[3] Restlager','[4] Difference','[5] Difference pct','[6] Anvendt til produktion',
-                     '[7] Difference','[8] Difference pct','[9] Ristet kaffe','[10] Difference','[11] Difference pct',
-                     '[12] Færdigvareproduktion','[13] Difference','[14] Difference pct','[15] Salg','[16] Regulering & ompak',
-                     '[17] Restlager','[18] Difference','[19] Difference pct']
-    columns_2_pct = []
+    columns_1_dec = ['[1] Kontrakt','[2] Renset','[3] Restlager','[4] Difference','[6] Anvendt til produktion',
+                     '[7] Difference','[9] Ristet kaffe','[10] Difference','[12] Færdigvareproduktion',
+                     '[13] Difference','[15] Salg','[16] Regulering & ompak','[17] Restlager','[18] Difference']
+    columns_2_pct = ['[5] Difference pct','[8] Difference pct','[11] Difference pct','[14] Difference pct','[19] Difference pct']
     
     dict_massebalance = {'[1] Kontrakt': df_probat_receiving['Kilo'].sum(),
                          '[2] Renset': df_probat_processing['Kilo'].sum(),
@@ -679,7 +829,23 @@ class rapport_råkaffe:
                          '[18] Difference': None,
                          '[19] Difference pct': None
                         }
-    
+    # Calculate differences and percentages before converting to dataframe:
+    dict_massebalance['[4] Difference'] = dict_massebalance['[1] Kontrakt'] - dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager']
+    dict_massebalance['[5] Difference pct'] = zero_division(dict_massebalance['[4] Difference'], dict_massebalance['[1] Kontrakt'], 'None')
+    dict_massebalance['[7] Difference'] = ( dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager']
+                                            - dict_massebalance['[6] Anvendt til produktion'] )
+    dict_massebalance['[8] Difference pct'] = zero_division(dict_massebalance['[7] Difference'], 
+                                                            dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'], 'None')
+    dict_massebalance['[10] Difference'] = dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'] - dict_massebalance['[9] Ristet kaffe']
+    dict_massebalance['[11] Difference pct'] = zero_division(dict_massebalance['[10] Difference'], 
+                                                            dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'], 'None')
+    dict_massebalance['[13] Difference'] = dict_massebalance['[9] Ristet kaffe'] - dict_massebalance['[12] Færdigvareproduktion']
+    dict_massebalance['[14] Difference pct'] = zero_division(dict_massebalance['[13] Difference'], 
+                                                             dict_massebalance['[9] Ristet kaffe'] - dict_massebalance['[12] Færdigvareproduktion'], 'None')
+    dict_massebalance['[18] Difference'] = ( dict_massebalance['[12] Færdigvareproduktion'] - dict_massebalance['[15] Salg'] 
+                                             - dict_massebalance['[16] Regulering & ompak'] - dict_massebalance['[17] Restlager'] )
+    dict_massebalance['[19] Difference pct'] = zero_division(dict_massebalance['[18] Difference'], 
+                                                             dict_massebalance['[12] Færdigvareproduktion'], 'None')
     #Number formating
     for col in columns_1_dec:
         dict_massebalance[col] = number_format(dict_massebalance[col] ,'dec_1')

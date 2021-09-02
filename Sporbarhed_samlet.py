@@ -519,7 +519,10 @@ class rapport_færdigkaffe:
                                       AND [ILE_C].[Entry Type] IN (5,8)
                                   INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
                                 	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                                      AND ILE_O.[Entry Type] IN (6,9) )
+                                      AND ILE_O.[Entry Type] IN (6,9)
+                                  INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
+									  ON ILE_O.[Item No_] = I.[No_]
+								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
                                   ,[LOT_SINGLE] AS ( SELECT [Lot No_]
                                   FROM [LOT_ORG] GROUP BY [Lot No_] )
                                   SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]

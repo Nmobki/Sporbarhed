@@ -509,7 +509,6 @@ class rapport_råkaffe:
     # String used for querying Navision, only finished goods
     req_orders_total = string_to_sql(orders_top_level) 
     
-    print(req_orders_total)
     # Recursive query to find all relevant produced orders related to the requested order
     # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
     # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
@@ -549,9 +548,7 @@ class rapport_råkaffe:
                                 INNER JOIN [LOT_SINGLE]
                                 	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
                                 GROUP BY ILE.[Item No_],I.[Description] """
-    print(query_nav_færdigvaretilgang)
     df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
-    print(df_nav_færdigvaretilgang)
    
 
     # =============================================================================
@@ -823,12 +820,12 @@ class rapport_råkaffe:
                          '[9] Ristet kaffe': df_probat_roast_total['Kilo ristet'].sum(),
                          '[10] Difference': None,
                          '[11] Difference pct': None,
-                         '[12] Færdigvareproduktion': 99999,
+                         '[12] Færdigvareproduktion': df_nav_færdigvaretilgang['Produceret'].sum(),
                          '[13] Difference': None,
                          '[14] Difference pct': None,
-                         '[15] Salg': 99999,
-                         '[16] Regulering & ompak': 99999,
-                         '[17] Restlager': 99999,
+                         '[15] Salg': df_nav_færdigvaretilgang['Salg'].sum(),
+                         '[16] Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum(),
+                         '[17] Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
                          '[18] Difference': None,
                          '[19] Difference pct': None
                         }
@@ -843,8 +840,7 @@ class rapport_råkaffe:
     dict_massebalance['[11] Difference pct'] = zero_division(dict_massebalance['[10] Difference'], 
                                                             dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'], 'None')
     dict_massebalance['[13] Difference'] = dict_massebalance['[9] Ristet kaffe'] - dict_massebalance['[12] Færdigvareproduktion']
-    dict_massebalance['[14] Difference pct'] = zero_division(dict_massebalance['[13] Difference'], 
-                                                             dict_massebalance['[9] Ristet kaffe'] - dict_massebalance['[12] Færdigvareproduktion'], 'None')
+    dict_massebalance['[14] Difference pct'] = zero_division(dict_massebalance['[13] Difference'], dict_massebalance['[12] Færdigvareproduktion'], 'None')
     dict_massebalance['[18] Difference'] = ( dict_massebalance['[12] Færdigvareproduktion'] - dict_massebalance['[15] Salg'] 
                                              - dict_massebalance['[16] Regulering & ompak'] - dict_massebalance['[17] Restlager'] )
     dict_massebalance['[19] Difference pct'] = zero_division(dict_massebalance['[18] Difference'], 
@@ -858,7 +854,7 @@ class rapport_råkaffe:
     df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
     df_massebalance.columns = ['Sektion','Værdi']
     df_massebalance['Note'] = [None,None,None,'[1]-[2]-[3]','[4]/[1]',None,'[2]-[3]-[6]','[7]/([2]-[3])',None,
-                               '[2]-[3]-[9]','[10]/([2]-[3])',None,'[9]-[12]','[13]/([9]-[12])',None,None,None,
+                               '[2]-[3]-[9]','[10]/([2]-[3])',None,'[9]-[12]','[13]/[12]',None,None,None,
                                '[12]-[15]-[16]-[17]','[18]/[12]']
     df_massebalance['Bemærkning'] = None
     

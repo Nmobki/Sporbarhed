@@ -231,6 +231,18 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
+# Query section log for each section logged per script-run.
+# Query is only executed at the end of each class
+query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
+                       ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
+                       ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
+                       FROM [trc].[Sporbarhed_sektion_log] AS SL
+                       INNER JOIN [trc].[Sporbarhed_sektion] AS S
+                         	ON SL.[Sektion] = S.[Id]
+                       INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
+                            ON SL.[Statuskode] = SS.[Id]
+                       WHERE SL.[Forespørgsels_id] = {req_id} """
+
 class rapport_råkaffe:
     # General info from Navision
     query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
@@ -883,17 +895,27 @@ class rapport_råkaffe:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+    # =============================================================================
+    # Section 18: Sektionslog
+    # =============================================================================
+    section_id = 18
+    df_section_log = pd.read_sql(query_ds_section_log, con_04)
+    section_name = get_section_name(section_id)
+    
+    if get_section_status_code(df_section_log) == 99:
+        try:
+            df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
+            df_section_log.sort_values(by=['Sektionskode'], inplace=True)
+            # Write results to Word and Excel
+            insert_dataframe_into_excel (df_section_log, section_name, False)
+            add_section_to_word(df_section_log, section_name, False, [0])
+            # Write status into log
+            section_log_insert(section_id, 0)
+        except Exception as e: # Insert error into log
+            section_log_insert(section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        section_log_insert(section_id, get_section_status_code(df_section_log))
+    
     #Save files
     excel_writer.save()
     # log_insert(script_name, f'Excel file {file_name} created')

@@ -525,12 +525,12 @@ class rapport_råkaffe:
     # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
     # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
     # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-    query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+    query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Document No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Order No_] IN ({req_orders_total})
                                   AND [Entry Type] = 6
                                   UNION ALL
-                                  SELECT ILE_O.[Lot No_]
+                                  SELECT ILE_O.[Lot No_],ILE_O.[Document No_]
                                   FROM [LOT_ORG]
                                   INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                                       ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
@@ -541,9 +541,9 @@ class rapport_råkaffe:
                                   INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
 									  ON ILE_O.[Item No_] = I.[No_]
 								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                                  ,[LOT_SINGLE] AS ( SELECT [Lot No_]
-                                  FROM [LOT_ORG] GROUP BY [Lot No_] )
-                                  SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]
+                                  ,[LOT_SINGLE] AS ( SELECT [Lot No_],[Document No_] AS [Ordrenummer]
+                                  FROM [LOT_ORG] GROUP BY [Lot No_],[Document No_] )
+                                  SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn],[LOT_SINGLE].[Ordrenummer]
                             	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                             		THEN ILE.[Quantity] * I.[Net Weight]
                             		ELSE 0 END) AS [Produceret]
@@ -559,9 +559,8 @@ class rapport_råkaffe:
                                 	ON ILE.[Item No_] = I.[No_]
                                 INNER JOIN [LOT_SINGLE]
                                 	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                                GROUP BY ILE.[Item No_],I.[Description] """
+                                GROUP BY ILE.[Item No_],I.[Description],[LOT_SINGLE].[Ordrenummer] """
     df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
-   
 
     # =============================================================================
     # Section 1: Generelt
@@ -723,14 +722,14 @@ class rapport_råkaffe:
     # =============================================================================
     section_id = 4
     section_name = get_section_name(section_id)
-    column_order = ['Varenummer','Varenavn','Dato','Silo','Kilo']
+    column_order = ['Varenummer','Varenavn','Ordrenummer','Dato','Silo','Kilo']
     columns_1_dec = ['Kilo']
 
     if get_section_status_code(df_probat_grinding_input) == 99:
         try:
             # Apply column formating for date column before concat
             df_probat_grinding_input['Dato'] = df_probat_grinding_input['Dato'].dt.strftime('%d-%m-%Y')
-            # Concat dates into one strng and sum numeric columns if they can be grouped
+            # Concat dates into one string and sum numeric columns if they can be grouped
             df_probat_grinding_input = df_probat_grinding_input.groupby(['Ordrenummer','Varenummer','Mølle']).agg(
                 {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
                 }).reset_index()
@@ -778,11 +777,21 @@ class rapport_råkaffe:
     # =============================================================================
     section_id = 3
     section_name = get_section_name(section_id)
-    column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
+    column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
     
     if get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
+            # Concat order numbers to one string
+            df_nav_færdigvaretilgang = df_nav_færdigvaretilgang.groupby(['Varenummer','Varenavn']).agg(
+                {'Ordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                 'Produceret': 'sum',
+                 'Salg': 'sum',
+                 'Restlager': 'sum',
+                 'Regulering & ompak': 'sum'
+                }).reset_index()
+            df_probat_grinding_total['Ordrenummer'] = df_probat_grinding_total['Ordrenummer'].apply(lambda x: x.rstrip(','))
+            df_probat_grinding_total['Ordrenummer'] = df_probat_grinding_total['Ordrenummer'].apply(lambda x: x.lstrip(','))
             # Create total for dataframe
             dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                      'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],

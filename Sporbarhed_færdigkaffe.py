@@ -507,12 +507,12 @@ req_orders_total = string_to_sql(orders_top_level) # String used for querying Na
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
 # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
 # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_], [Document No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Order No_] IN ({req_orders_total})
                               AND [Entry Type] = 6
                               UNION ALL
-                              SELECT ILE_O.[Lot No_]
+                              SELECT ILE_O.[Lot No_], ILE_O.[Document No_]
                               FROM [LOT_ORG]
                               INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                                   ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
@@ -523,9 +523,9 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
 								  ON ILE_O.[Item No_] = I.[No_]
 								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                              ,[LOT_SINGLE] AS ( SELECT [Lot No_]
-                              FROM [LOT_ORG] GROUP BY [Lot No_] )
-                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]
+                              ,[LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
+                              FROM [LOT_ORG] GROUP BY [Lot No_] ), [Document No_]
+                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
                         	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight]
                         		ELSE 0 END) AS [Produceret]
@@ -541,16 +541,16 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                             	ON ILE.[Item No_] = I.[No_]
                             INNER JOIN [LOT_SINGLE]
                             	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                            GROUP BY ILE.[Item No_],I.[Description] """
+                            GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
 df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
 
 # Recursive query to get all customer who purchased identified lotnumbers.
 # See explanation of query above
-query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_], [Document No_]
                       FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                       WHERE [Order No_] IN({req_orders_total}) AND [Entry Type] = 6
                       UNION ALL
-                      SELECT ILE_O.[Lot No_]
+                      SELECT ILE_O.[Lot No_], ILE_O.[Document No_]
                       FROM [LOT_ORG]
                       INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                           ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
@@ -558,9 +558,9 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                       INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
                     	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
                     	  AND ILE_O.[Entry Type] IN (6,9) )
-                      ,[LOT_SINGLE] AS ( SELECT [Lot No_]
-                      FROM [LOT_ORG] GROUP BY [Lot No_] )
-                      SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn]
+                      ,[LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
+                      FROM [LOT_ORG] GROUP BY [Lot No_],[Document No_] )
+                      SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn], LOT_SINGLE.[Produktionsordrenummer]
                     	  ,ILE.[Posting Date] AS [Dato]
                     	  ,ILE.[Item No_] AS [Varenummer]
                     	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
@@ -573,7 +573,7 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                       INNER JOIN [dbo].[BKI foods a_s$Customer] (NOLOCK) AS C
                     	  ON ILE.[Source No_] = C.[No_]
                       WHERE ILE.[Entry Type] = 1
-                      GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_] """
+                      GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer] """
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
 # Query to show relation between requested order and any orders which have used it as components
@@ -837,11 +837,21 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 3
 section_name = get_section_name(section_id)
-column_order = ['Varenummer','Varenavn','Produceret','Salg','Restlager','Regulering & ompak']
+column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
 columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
 
 if get_section_status_code(df_nav_færdigvaretilgang) == 99:
     try:
+        # Concat order numbers to one string
+        df_nav_færdigvaretilgang = df_nav_færdigvaretilgang.groupby(['Varenummer','Varenavn']).agg(
+           {'Ordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+            'Produceret': 'sum',
+            'Salg': 'sum',
+            'Restlager': 'sum',
+            'Regulering & ompak': 'sum'
+           }).reset_index()
+        df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.rstrip(','))
+        df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.lstrip(','))
         # Create total for dataframe
         dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                  'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
@@ -992,14 +1002,25 @@ else: # Write into log if no data is found or section is out of scope
 # =============================================================================
 section_id = 7
 section_name = get_section_name(section_id)
-column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Enheder','Kilo']
+column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Varenavn','Produktionsordrenummer',
+                    'Enheder','Kilo']
 columns_1_dec = ['Enheder','Kilo']
 
 if get_section_status_code(df_nav_debitorer) == 99:
     try:
+        # Concat Order nos to one string
+        df_nav_debitorer = df_nav_debitorer.groupby(['Debitornummer','Debitornavn','Dato','Varenummer']).agg(
+            {'Produktionsordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+             'Enheder': 'sum',
+             'Kilo': 'sum'
+            }).reset_index()
+        df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.rstrip(','))
+        df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.lstrip(','))
         # Create total for dataframe
         dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
                               'Kilo':[df_nav_debitorer['Kilo'].sum()]}
+        # Add varenavn
+        df_nav_debitorer['Varenavn'] = df_nav_debitorer['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
          # Look up column values and string format datecolumn for export
         df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
         # Create temp dataframe with total

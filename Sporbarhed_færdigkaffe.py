@@ -524,7 +524,7 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_], [Docum
 								  ON ILE_O.[Item No_] = I.[No_]
 								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
                               ,[LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
-                              FROM [LOT_ORG] GROUP BY [Lot No_] ), [Document No_]
+                              FROM [LOT_ORG] GROUP BY [Lot No_], [Document No_])
                               SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
                         	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight]

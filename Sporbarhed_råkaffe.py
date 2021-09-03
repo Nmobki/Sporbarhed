@@ -825,8 +825,8 @@ class rapport_råkaffe:
                  'Restlager': 'sum',
                  'Regulering & ompak': 'sum'
                 }).reset_index()
-            df_probat_grinding_total['Ordrenummer'] = df_probat_grinding_total['Ordrenummer'].apply(lambda x: x.rstrip(','))
-            df_probat_grinding_total['Ordrenummer'] = df_probat_grinding_total['Ordrenummer'].apply(lambda x: x.lstrip(','))
+            df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.rstrip(','))
+            df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.lstrip(','))
             # Create total for dataframe
             dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                      'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],

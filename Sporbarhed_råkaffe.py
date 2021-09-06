@@ -243,7 +243,7 @@ query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                             ON SL.[Statuskode] = SS.[Id]
                        WHERE SL.[Forespørgsels_id] = {req_id} """
 
-class rapport_råkaffe:
+def rapport_råkaffe():
     # General info from Navision
     query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
                     	,V.[Name] AS [Leverandørnavn] ,PL.[No_] AS [Varenummer]
@@ -734,7 +734,6 @@ class rapport_råkaffe:
                                      }
 
             # Create temp dataframe including total
-            df_total_temp = pd.DataFrame([dict_risteordrer_total])
             df_temp_total = pd.concat([df_probat_roast_total,
                                    pd.DataFrame([dict_risteordrer_total])])
             for col in columns_1_dec:
@@ -790,7 +789,6 @@ class rapport_råkaffe:
             dict_mølleordrer_total = {'Kilo': df_probat_grinding_total['Kilo'].sum()}
 
             # Create temp dataframe including total
-            df_total_temp = pd.DataFrame([dict_mølleordrer_total])
             df_temp_total = pd.concat([df_probat_grinding_total,
                                    pd.DataFrame([dict_mølleordrer_total])])
             for col in columns_1_dec:

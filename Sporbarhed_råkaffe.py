@@ -496,6 +496,15 @@ query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
                       WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
                     	AND PB.[ORDER_NAME] <> ''
                       GROUP BY PB.[ORDER_NAME],PB.[S_ORDER_NAME]
+                      UNION ALL
+					  -- Mølleordrer
+                      SELECT LG.[ORDER_NAME] AS [Ordrenummer],LG.[S_ORDER_NAME] AS [Relateret ordre],'Probat mølle' AS [Kilde]
+                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                      INNER JOIN [dbo].[PRO_EXP_ORDER_LOAD_G] AS LG
+                    	ON LR.[ORDER_NAME] = LG.[S_ORDER_NAME]
+                      WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                    	AND LG.[ORDER_NAME] <> ''
+                      GROUP BY LG.[ORDER_NAME],LG.[S_ORDER_NAME]                      	
                       END
                       IF 'None' <> 'None' -- Modtagelse defineret
                       BEGIN
@@ -520,8 +529,19 @@ query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
                     	AND LR.[S_DELIVERY_NAME] = '{req_modtagelse}'
                     	AND PB.[ORDER_NAME] <> ''
                       GROUP BY PB.[ORDER_NAME],PB.[S_ORDER_NAME]
+                      UNION ALL
+					  -- Mølleordrer
+                      SELECT LG.[ORDER_NAME] AS [Ordrenummer],LG.[S_ORDER_NAME] AS [Relateret ordre],'Probat mølle' AS [Kilde]
+                      FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+                      INNER JOIN [dbo].[PRO_EXP_ORDER_LOAD_G] AS LG
+                    	ON LR.[ORDER_NAME] = LG.[S_ORDER_NAME]
+                      WHERE LR.[S_CONTRACT_NO] = '{req_reference_no}'
+                    	AND LR.[S_DELIVERY_NAME] = '{req_modtagelse}'
+                    	AND LG.[ORDER_NAME] <> ''
+                      GROUP BY LG.[ORDER_NAME],LG.[S_ORDER_NAME]
                       END """
 df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
+df_probat_orders_top = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
  
 # Join previous found orders to one list for query below
 sql_related_orders = string_to_sql(roast_orders + grinder_orders)
@@ -538,14 +558,14 @@ df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
 # Merge Probat and NAV orders before merging
 nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
 nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
-probat_orders_top = df_probat_orders['Ordrenummer'].unique().tolist()
-probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
+probat_orders_top = df_probat_orders_top['Ordrenummer'].unique().tolist()
+probat_orders_related = df_probat_orders_top['Relateret ordre'].unique().tolist()
 temp_orders_top = probat_orders_top + nav_orders_top
 temp_orders_related = probat_orders_related + nav_orders_related
 
 # If order doesn't exist in list, append:
 for order in temp_orders_top:
-    if order not in  orders_top_level and order != '':
+    if order not in  orders_top_level:
         orders_top_level.append(order)
 
 for order in temp_orders_related:
@@ -1043,15 +1063,10 @@ df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related]
 
 if get_section_status_code(df_temp_orders) == 99:
     try:
-        print('a')
         df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: get_nav_order_info(x))
-        print('b')
         df_temp_orders['Navn'] = df_temp_orders['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
-        print('c')
         df_temp_orders['Relateret vare'] = df_temp_orders['Relateret ordre'].apply(lambda x: get_nav_order_info(x))
-        print('d')
         df_temp_orders['Relateret navn'] = df_temp_orders['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
-        print('e')
         df_temp_orders = df_temp_orders[column_order]
         df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
         # Write results to Word and Excel
@@ -1059,35 +1074,35 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-
+        print('Halli \n Hallo')
 # =================================================================
 # Section 19: Relation visualization
 # =================================================================
-        # #Try to create .png with relations illustrated and add to .docx as well
-        # try:
-        #     df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
-        #     df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
-        #     df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
-        #     df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
-        #     df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
-        #     df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
-        #     # Add green coffees
-        #     df_temp_gc_orders = pd.DataFrame(columns=['Primær','Sekundær'])
-        #     df_temp_gc_orders['Primær'] = 'Ristet kaffe' + '\n' + df_probat_lr['Ordrenummer']
-        #     df_temp_gc_orders['Sekundær'] = 'Råkaffe' + '\n' + df_probat_lr['Kontraktnummer'] + '/' + df_probat_lr['Modtagelse']
-        #     df_order_relations = pd.concat([df_temp_order_relation,df_temp_gc_orders])
-        #     # Create relation visualization
-        #     array_for_drawing = list(df_order_relations.itertuples(index=False, name=None))
-        #     graph = nx.DiGraph()
-        #     graph.add_edges_from(array_for_drawing)
-        #     relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
-        #     relations_plot.write_png(path_png_relations)
-        #     # Add image to word document
-        #     doc.add_picture(path_png_relations, width=Inches(11.0), height=Inches(6.50))
-        #     # Write to log
-        #     section_log_insert(19, 0)
-        # except Exception as e: # Insert error into log. Same section_id as others..
-        #     section_log_insert(19, 2, e)         
+        #Try to create .png with relations illustrated and add to .docx as well
+        try:
+            df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
+            df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
+            df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
+            df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
+            df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
+            df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
+            # Add green coffees
+            df_temp_gc_orders = pd.DataFrame(columns=['Primær','Sekundær'])
+            df_temp_gc_orders['Primær'] = 'Ristet kaffe' + '\n' + df_probat_roast_input['Ordrenummer']
+            df_temp_gc_orders['Sekundær'] = 'Råkaffe' + '\n' + req_reference_no
+            df_order_relations = pd.concat([df_temp_order_relation,df_temp_gc_orders])
+            # Create relation visualization
+            array_for_drawing = list(df_order_relations.itertuples(index=False, name=None))
+            graph = nx.DiGraph()
+            graph.add_edges_from(array_for_drawing)
+            relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
+            relations_plot.write_png(path_png_relations)
+            # Add image to word document
+            doc.add_picture(path_png_relations, width=Inches(11.0), height=Inches(6.50))
+            # Write to log
+            section_log_insert(19, 0)
+        except Exception as e: # Insert error into log. Same section_id as others..
+            section_log_insert(19, 2, e)         
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope

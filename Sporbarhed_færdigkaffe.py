@@ -476,13 +476,15 @@ probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
 query_nav_order_related = f"""WITH [CTE_ORDER] AS (SELECT [Prod_ Order No_]
                    ,[Reserved Prod_ Order No_]
                    FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
-                   WHERE [Prod_ Order No_] = '{req_order_no}' )
+                   WHERE [Prod_ Order No_] = '{req_order_no}' 
+                   AND [Invalid] = 0)
                    SELECT [Prod_ Order No_] AS [Ordrenummer] 
                    ,[Reserved Prod_ Order No_] AS [Relateret ordre]
                    ,'Navision reservationer' AS [Kilde]
                    FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
                    WHERE [Reserved Prod_ Order No_] IN 
-                   (SELECT [Reserved Prod_ Order No_] FROM [CTE_ORDER] )"""
+                   (SELECT [Reserved Prod_ Order No_] FROM [CTE_ORDER] )
+                   AND [Invalid] = 0 """
 df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
 
 # Get list of orders and append to lists if they do not already exist

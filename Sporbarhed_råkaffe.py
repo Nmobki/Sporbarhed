@@ -71,9 +71,9 @@ def number_format(value, number_type):
 
 # Prevent division by zero error
 def zero_division(nominator, denominator, zero_return):
-    dict = {'None':None,'Zero':0}
+    dict_div = {'None':None,'Zero':0}
     if denominator in [0,None]:
-        return dict[zero_return]
+        return dict_div[zero_return]
     else:
         return nominator / denominator
 
@@ -93,7 +93,7 @@ def get_nav_item_info(item_no, field):
 
 # Get info from assembly and production orders in Navision
 def get_nav_order_info(order_no):
-    if order_no in df_nav_order_info['Ordrenummer'].tolist(): 
+    if order_no in df_nav_order_info['Ordrenummer'].tolist():
         df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
         return df_temp['Varenummer'].iloc[0]
     else:
@@ -453,7 +453,7 @@ query_probat_grinding_input = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
                         	  ,[DESTINATION] """
 # Only try to read query if any orders exist
 if len(sql_roast_orders) > 0:
-        df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
+    df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
 else:
     df_probat_grinding_input = pd.DataFrame()
 
@@ -470,7 +470,7 @@ query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
                                GROUP BY [ORDER_NAME],[DEST_NAME] """
 # Only try to read query if any orders exist
 if len(sql_grinder_orders) > 0:
-        df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
+    df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
 else:
     df_probat_grinding_output = pd.DataFrame()
 
@@ -542,11 +542,11 @@ query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
                       END """
 df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
 df_probat_orders_top = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
- 
+
 # Join previous found orders to one list for query below
 sql_related_orders = string_to_sql(roast_orders + grinder_orders)
 # Get related orders from Navision
-query_nav_order_related = f""" SELECT [Prod_ Order No_] AS [Ordrenummer] 
+query_nav_order_related = f""" SELECT [Prod_ Order No_] AS [Ordrenummer]
                            ,[Reserved Prod_ Order No_] AS [Relateret ordre]
                            ,'Navision reservationer' AS [Kilde]
                            FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
@@ -573,7 +573,7 @@ for order in temp_orders_related:
     if order not in orders_related:
         orders_related.append(order)
 # String used for querying Navision, only finished goods
-req_orders_total = string_to_sql(orders_top_level) 
+req_orders_total = string_to_sql(orders_top_level)
 
 # Recursive query to find all relevant produced orders related to the requested order
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
@@ -1017,16 +1017,16 @@ dict_massebalance['[4] Difference'] = dict_massebalance['[1] Kontrakt'] - dict_m
 dict_massebalance['[5] Difference pct'] = zero_division(dict_massebalance['[4] Difference'], dict_massebalance['[1] Kontrakt'], 'None')
 dict_massebalance['[7] Difference'] = ( dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager']
                                         - dict_massebalance['[6] Anvendt til produktion'] )
-dict_massebalance['[8] Difference pct'] = zero_division(dict_massebalance['[7] Difference'], 
+dict_massebalance['[8] Difference pct'] = zero_division(dict_massebalance['[7] Difference'],
                                                         dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'], 'None')
 dict_massebalance['[10] Difference'] = dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'] - dict_massebalance['[9] Ristet kaffe']
-dict_massebalance['[11] Difference pct'] = zero_division(dict_massebalance['[10] Difference'], 
+dict_massebalance['[11] Difference pct'] = zero_division(dict_massebalance['[10] Difference'],
                                                         dict_massebalance['[2] Renset'] - dict_massebalance['[3] Restlager'], 'None')
 dict_massebalance['[13] Difference'] = dict_massebalance['[9] Ristet kaffe'] - dict_massebalance['[12] Færdigvareproduktion']
 dict_massebalance['[14] Difference pct'] = zero_division(dict_massebalance['[13] Difference'], dict_massebalance['[12] Færdigvareproduktion'], 'None')
-dict_massebalance['[18] Difference'] = ( dict_massebalance['[12] Færdigvareproduktion'] - dict_massebalance['[15] Salg'] 
+dict_massebalance['[18] Difference'] = ( dict_massebalance['[12] Færdigvareproduktion'] - dict_massebalance['[15] Salg']
                                          - dict_massebalance['[16] Regulering & ompak'] - dict_massebalance['[17] Restlager'] )
-dict_massebalance['[19] Difference pct'] = zero_division(dict_massebalance['[18] Difference'], 
+dict_massebalance['[19] Difference pct'] = zero_division(dict_massebalance['[18] Difference'],
                                                          dict_massebalance['[12] Færdigvareproduktion'], 'None')
 #Number formating
 for col in columns_1_dec:
@@ -1068,6 +1068,8 @@ if get_section_status_code(df_temp_orders) == 99:
         df_temp_orders['Navn'] = df_temp_orders['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
         df_temp_orders['Relateret vare'] = df_temp_orders['Relateret ordre'].apply(lambda x: get_nav_order_info(x))
         df_temp_orders['Relateret navn'] = df_temp_orders['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Beskrivelse'))
+        # Remove orders not existing in NAV and sort columns and rows
+        df_temp_orders.dropna(inplace=True)
         df_temp_orders = df_temp_orders[column_order]
         df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
         # Write results to Word and Excel
@@ -1083,8 +1085,6 @@ if get_section_status_code(df_temp_orders) == 99:
             df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
             df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
             df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
-            df_temp_order_relation['Ordretype'].apply(lambda x: convert_placeholders_word(x))
-            df_temp_order_relation['Relateret ordretype'].apply(lambda x: convert_placeholders_word(x))
             df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
             df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
             df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
@@ -1104,7 +1104,7 @@ if get_section_status_code(df_temp_orders) == 99:
             # Write to log
             section_log_insert(19, 0)
         except Exception as e: # Insert error into log. Same section_id as others..
-            section_log_insert(19, 2, e)         
+            section_log_insert(19, 2, e)
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
@@ -1154,7 +1154,7 @@ doc.save(path_file_doc)
 
 
 
-    
+
 
 # =============================================================================
 # Write into email log

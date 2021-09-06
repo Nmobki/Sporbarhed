@@ -239,7 +239,24 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
-class rapport_færdigkaffe:
+# Query for getting item numbers for production and assembly orders from Navision
+query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
+                       ,PAH.[Item No_] AS [Varenummer]
+                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PAH.[Item No_] = I.[No_]
+                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
+                           AND I.[Display Item] = 1
+                       UNION ALL
+                       SELECT PO.[No_],PO.[Source No_]
+                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PO.[Source No_] = I.[No_]
+                       WHERE PO.[Status] IN (2,3,4)
+                           AND I.[Item Category Code] <> 'RÅKAFFE' """
+df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+
+def rapport_færdigkaffe():
     # =============================================================================
     # Queries for different parts of report
     # =============================================================================
@@ -271,23 +288,6 @@ class rapport_færdigkaffe:
     df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
 
     production_machine = df_results_generelt['Pakkelinje'].iloc[0]
-
-    # Query for getting item numbers for production and assembly orders from Navision
-    query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
-                           ,PAH.[Item No_] AS [Varenummer]
-                           FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
-                           INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                               ON PAH.[Item No_] = I.[No_]
-                           WHERE I.[Item Category Code] = 'FÆR KAFFE'
-                               AND I.[Display Item] = 1
-                           UNION ALL
-                           SELECT PO.[No_],PO.[Source No_]
-                           FROM [dbo].[BKI foods a_s$Production Order] AS PO
-                           INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                               ON PO.[Source No_] = I.[No_]
-                           WHERE PO.[Status] IN (2,3,4)
-                               AND I.[Item Category Code] <> 'RÅKAFFE' """
-    df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
     # Query to get all samples registrered for the requested order.
     # Dataframe to be filtered later on to split by sample type.
@@ -423,8 +423,11 @@ class rapport_færdigkaffe:
                          LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                          WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
-
-    production_date = df_nav_generelt['Produktionsdato'].iloc[0]
+    
+    if len(df_nav_generelt) > 0:
+        production_date = df_nav_generelt['Produktionsdato'].iloc[0]
+    else:
+        production_date = None
 
     # Control of scales in packing area, 3 days back and 1 day ahead of production date
     query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
@@ -1351,9 +1354,9 @@ class rapport_færdigkaffe:
 if req_type == 0:
     rapport_færdigkaffe()
 elif req_type == 1:
-    pass
-elif req_type == 2:
     rapport_råkaffe()
+elif req_type == 2:
+    pass
 
 # =============================================================================
 # Write into email log

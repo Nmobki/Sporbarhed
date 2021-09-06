@@ -85,13 +85,19 @@ def log_insert(event, note):
 
 # Get info from item table in Navision
 def get_nav_item_info(item_no, field):
-    df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
-    return df_temp[field].iloc[0]
+    if item_no in df_nav_items['Nummer'].tolist():
+        df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
+        return df_temp[field].iloc[0]
+    else:
+        return None
 
 # Get info from assembly and production orders in Navision
 def get_nav_order_info(order_no):
-    df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
-    return df_temp['Varenummer'].iloc[0]
+    if order_no in df_nav_order_info['Ordrenummer'].tolist(): 
+        df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
+        return df_temp['Varenummer'].iloc[0]
+    else:
+        return None
 
 # Convert placeholder values from dataframe to empty string for Word document
 def convert_placeholders_word(string):

@@ -551,7 +551,8 @@ query_nav_order_related = f""" SELECT [Prod_ Order No_] AS [Ordrenummer]
                            ,'Navision reservationer' AS [Kilde]
                            FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
                            WHERE [Reserved Prod_ Order No_] IN 
-                           ({sql_related_orders})"""
+                           ({sql_related_orders})
+                           AND [Invalid] = 0 """
 df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
 
 # Get list of orders and append to lists if they do not already exist
@@ -1074,7 +1075,6 @@ if get_section_status_code(df_temp_orders) == 99:
         add_section_to_word(df_temp_orders, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
-        print('Halli \n Hallo')
 # =================================================================
 # Section 19: Relation visualization
 # =================================================================
@@ -1083,6 +1083,8 @@ if get_section_status_code(df_temp_orders) == 99:
             df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
             df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
             df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: get_nav_item_info(x, 'Varetype'))
+            df_temp_order_relation['Ordretype'].apply(lambda x: convert_placeholders_word(x))
+            df_temp_order_relation['Relateret ordretype'].apply(lambda x: convert_placeholders_word(x))
             df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
             df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
             df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]

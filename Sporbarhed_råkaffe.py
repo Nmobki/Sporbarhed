@@ -688,6 +688,40 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               GROUP BY DO.[Document No_] ,DC.[Document No_] """
 df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
 
+# Query to get karakterer saved in BKI_Datastore
+query_ds_karakterer = f""" IF 'None' = 'None'
+                      BEGIN
+                      SELECT SK.[Id],RRP.[Id] AS [Risteri id],SK.[Bruger] AS [Person],SK.[Dato] AS [Registreringstidspunkt]
+                      ,SK.[Smag_Syre] AS [Syre],SK.[Smag_Krop] AS [Krop],SK.[Smag_Aroma] AS [Aroma],SK.[Smag_Eftersmag] AS [Eftersmag]
+                      ,SK.[Smag_Robusta] AS [Robusta],ISNULL(S.[Beskrivelse],'Ej smagt') AS [Status],SK.[Bemærkning]
+                      FROM [cof].[Smageskema] AS SK
+                      LEFT JOIN [cof].[Risteri_modtagelse_registrering] AS RMR
+                    	ON SK.[Id_org] = RMR.[Id]
+                        AND RMR.[Id_org_kildenummer] = 3
+                      LEFT JOIN [cof].[Risteri_råkaffe_planlægning] AS RRP
+                    	ON RMR.[Id_org] = RRP.[Id]
+                      LEFT JOIN [cof].[Status] AS S
+                    	ON SK.[Status] = S.[Id]
+                      WHERE SK.[Kontraktnummer] = '{req_reference_no}'
+                      END
+                      IF 'None' <> 'None'
+                      BEGIN
+                      SELECT SK.[Id],RRP.[Id] AS [Risteri id],SK.[Bruger] AS [Person],SK.[Dato] AS [Registreringstidspunkt]
+                      ,SK.[Smag_Syre] AS [Syre],SK.[Smag_Krop] AS [Krop],SK.[Smag_Aroma] AS [Aroma],SK.[Smag_Eftersmag] AS [Eftersmag]
+                      ,SK.[Smag_Robusta] AS [Robusta],ISNULL(S.[Beskrivelse],'Ej smagt') AS [Status],SK.[Bemærkning]
+                      FROM [cof].[Smageskema] AS SK
+                      LEFT JOIN [cof].[Risteri_modtagelse_registrering] AS RMR
+                    	ON SK.[Id_org] = RMR.[Id]
+                        AND RMR.[Id_org_kildenummer] = 3
+                      LEFT JOIN [cof].[Risteri_råkaffe_planlægning] AS RRP
+                    	ON RMR.[Id_org] = RRP.[Id]
+                      LEFT JOIN [cof].[Status] AS S
+                    	ON SK.[Status] = S.[Id]
+                      WHERE SK.[Kontraktnummer] = '{req_reference_no}'
+                    	AND RRP.[Delivery] = '{req_modtagelse}'
+                      END """
+df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_04)
+
 
 # =============================================================================
 # Section 1: Generelt
@@ -1110,8 +1144,27 @@ if get_section_status_code(df_temp_orders) == 99:
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_orders))
 
+# =============================================================================
+# Section 12: Karakterer
+# =============================================================================
+section_id = 12
+section_name = get_section_name(section_id)
+column_order = ['Id','Risteri id','Person','Registreringstidspunkt','Syre','Krop','Aroma','Eftersmag','Robusta','Status','Bemærkning']
 
-
+if get_section_status_code(df_ds_karakterer) == 99:
+    try:
+        # String format datecolumn for export
+        df_ds_karakterer['Registreringstidspunkt'] = df_ds_karakterer['Registreringstidspunkt'].dt.strftime('%d-%m-%Y')
+        df_ds_karakterer.sort_values(by=['Id'], inplace=True)
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_ds_karakterer, section_name, False)
+        add_section_to_word(df_ds_karakterer, section_name, False, [0])
+        # Write status into log
+        section_log_insert(section_id, 0)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(section_id, get_section_status_code(df_ds_karakterer))
 
 
 

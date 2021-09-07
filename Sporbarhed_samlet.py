@@ -182,6 +182,12 @@ req_modtagelse = df_request.loc[0, 'Modtagelse']
 req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
 script_name = 'Sporbarhed_samlet.py'
+dict_email_emne = {
+    0: f'Anmodet rapport for ordre {req_reference_no}'
+    ,1: f'Anmodet rapport for parti {req_reference_no}'
+    ,2: 'Anmodet rapport for opspræt'
+    ,3: f'Anmodet rapport for handelsvare {req_reference_no}'
+    }
 timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
 orders_top_level = [req_reference_no]
 orders_related = []
@@ -1276,7 +1282,7 @@ elif req_type == 2:
 dict_email_log = {'Filsti': filepath
                   ,'Filnavn': file_name
                   ,'Modtager': req_recipients
-                  ,'Emne': f'Anmodet rapport for ordre {req_reference_no}'
+                  ,'Emne': dict_email_emne[req_type]
                   ,'Forespørgsels_id': req_id
                   ,'Note':req_note}
 pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)

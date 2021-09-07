@@ -722,6 +722,27 @@ query_ds_karakterer = f""" IF 'None' = 'None'
                       END """
 df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 
+query_probat_gc_samples = f""" IF 'None' = 'None'
+                        BEGIN
+                        SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
+                        ,[HUMIDITY_1] AS [Vandprocent 1],[HUMIDITY_2] AS [Vandprocent 2],[HUMIDITY_3] AS [Vandprocent 3]
+                        ,[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
+                        FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
+                        WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
+                        	AND [CONTRACT_NO] = '{req_reference_no}'
+                        END
+                        IF 'None' <> 'None'
+                        BEGIN
+                        SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
+                        ,[HUMIDITY_1] AS [Vandprocent 1],[HUMIDITY_2] AS [Vandprocent 2],[HUMIDITY_3] AS [Vandprocent 3]
+                        ,[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
+                        FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
+                        WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
+                        	AND [CONTRACT_NO] = '{req_reference_no}'
+                            AND [DELIVERY_NAME] = '{req_modtagelse}'
+                        END """
+df_probat_gc_samples = pd.read_sql(query_probat_gc_samples, con_probat)
+
 
 # =============================================================================
 # Section 1: Generelt
@@ -1167,10 +1188,28 @@ else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_ds_karakterer))
 
 
+# =============================================================================
+# Section 22: Probat samples
+# =============================================================================
+section_id = 22
+section_name = get_section_name(section_id)
+column_order = ['Dato','Probat id','Volumen,Vandprocent 1','Vandprocent 2','Vandprocent 3'
+                ,'Bruger','Bemærkning']
 
-
-
-
+if get_section_status_code(df_probat_gc_samples) == 99:
+    try:
+        # String format datecolumn for export
+        df_probat_gc_samples['Dato'] = df_probat_gc_samples['Dato'].dt.strftime('%d-%m-%Y')
+        df_probat_gc_samples.sort_values(by=['Probat id'], inplace=True)
+        # Write results to Word and Excel
+        insert_dataframe_into_excel (df_probat_gc_samples, section_name, False)
+        add_section_to_word(df_probat_gc_samples, section_name, False, [0])
+        # Write status into log
+        section_log_insert(section_id, 0)
+    except Exception as e: # Insert error into log
+        section_log_insert(section_id, 2, e)
+else: # Write into log if no data is found or section is out of scope
+    section_log_insert(section_id, get_section_status_code(df_probat_gc_samples))
 
 
 # =============================================================================

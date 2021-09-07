@@ -412,7 +412,6 @@ def rapport_råkaffe():
                                 FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
                                 WHERE [ORDER_NAME] IN ({sql_roast_orders})
                                 GROUP BY  [CUSTOMER_CODE] 
-                                ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                                 ,[ORDER_NAME] ,[DESTINATION]
                                 END
                                 IF 'None' <> 'None'
@@ -428,7 +427,6 @@ def rapport_råkaffe():
                                 FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
                                 WHERE [ORDER_NAME] IN ({sql_roast_orders})
                                 GROUP BY  [CUSTOMER_CODE]
-                                ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                                 ,[ORDER_NAME] ,[DESTINATION] END """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:

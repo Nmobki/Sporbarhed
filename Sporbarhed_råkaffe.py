@@ -155,7 +155,7 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # Read data from request
 # =============================================================================
 query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager]
-                    ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse] 
+                    ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                     FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL """
 df_request = pd.read_sql(query_ds_request, con_04)
@@ -173,6 +173,7 @@ req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
 req_modtagelse = df_request.loc[0, 'Modtagelse']
+req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
 script_name = 'Sporbarhed_samlet.py'
 timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
@@ -263,6 +264,11 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
     					   ON PH.[No_] = PL.[Document No_]
 						   AND PL.[Item Category Code] = 'RÅKAFFE' """
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+
+
+# =============================================================================
+# For complete script below here
+# =============================================================================
 
 # Query section log for each section logged per script-run.
 # Query is only executed at the end of each class
@@ -561,8 +567,17 @@ nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
 nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
 probat_orders_top = df_probat_orders_top['Ordrenummer'].unique().tolist()
 probat_orders_related = df_probat_orders_top['Relateret ordre'].unique().tolist()
-temp_orders_top = probat_orders_top + nav_orders_top
-temp_orders_related = probat_orders_related + nav_orders_related
+
+# Create strings dependent on request relationsship type, defined when report is requested by user
+if req_ordrelationstype == 0: # All
+    temp_orders_top = probat_orders_top + nav_orders_top
+    temp_orders_related = probat_orders_related + nav_orders_related
+elif req_ordrelationstype == 1: # Just Probat
+    temp_orders_top = probat_orders_top
+    temp_orders_related = probat_orders_related
+elif req_ordrelationstype == 2: # Just Navision
+    temp_orders_top = nav_orders_top
+    temp_orders_related = nav_orders_related
 
 # If order doesn't exist in list, append:
 for order in temp_orders_top:

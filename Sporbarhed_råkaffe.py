@@ -1130,7 +1130,14 @@ section_id = 2
 section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                 'Relateret vare','Relateret navn','Kilde']
-df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
+
+if req_ordrelationstype == 0:
+    df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
+elif req_ordrelationstype == 1:
+    df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
+elif req_ordrelationstype == 2:
+    df_temp_orders = pd.concat([df_nav_orders,df_nav_order_related
+                                ,df_probat_orders.loc[df_probat_orders['Kilde'] == 'Probat mølle']]) # Only Probat orders which are not related to finished goods
 
 if get_section_status_code(df_temp_orders) == 99:
     try:

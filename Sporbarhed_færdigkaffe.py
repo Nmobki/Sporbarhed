@@ -173,6 +173,7 @@ req_order_no = df_request.loc[0, 'Ordrenummer']
 req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
+req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
 script_name = 'Sporbarhed_færdigkaffe.py'
 timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
@@ -491,8 +492,17 @@ df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
 # Merge Probat and NAV orders before merging
 nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
 nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
-temp_orders_top = probat_orders_top + nav_orders_top
-temp_orders_related = probat_orders_related + nav_orders_related
+
+# Create strings dependent on request relationsship type, defined when report is requested by user
+if req_ordrelationstype == 0: # All
+    temp_orders_top = probat_orders_top + nav_orders_top
+    temp_orders_related = probat_orders_related + nav_orders_related
+elif req_ordrelationstype == 1: # Just Probat
+    temp_orders_top = probat_orders_top
+    temp_orders_related = probat_orders_related
+elif req_ordrelationstype == 2: # Just Navision
+    temp_orders_top = nav_orders_top
+    temp_orders_related = nav_orders_related
 
 # If order doesn't exist in list, append:
 for order in temp_orders_top:
@@ -786,7 +796,14 @@ section_id = 2
 section_name = get_section_name(section_id)
 column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                 'Relateret vare','Relateret navn','Kilde']
-df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
+
+if req_ordrelationstype == 0:
+    df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
+elif req_ordrelationstype == 1:
+    df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
+elif req_ordrelationstype == 2:
+    df_temp_orders = pd.concat([df_nav_orders,df_nav_order_related
+                                ,df_probat_orders.loc[df_probat_orders['Kilde'] == 'Probat mølle']]) # Only Probat orders which are not related to finished goods
 
 if get_section_status_code(df_temp_orders) == 99:
     try:

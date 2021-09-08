@@ -684,10 +684,10 @@ def rapport_råkaffe():
                                   INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
             						  ON ILE_O.[Item No_] = I.[No_]
         						  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                                  ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+                                  ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_], [Source No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Entry Type] IN (5,8)
-                                  GROUP BY [Lot No_], [Document No_] )
+                                  GROUP BY [Lot No_], [Document No_], [Source No_] )
                                   ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Entry Type] IN (6,9)
@@ -701,6 +701,7 @@ def rapport_råkaffe():
                                   LEFT JOIN [DOC_CONS] AS DC
                                       ON L.[Lot No_] = DC.[Lot No_]
                                   WHERE DC.[Document No_] IS NOT NULL
+    								AND DC.[Source No_] NOT IN ('10401401','10401403','10502401','10502403')
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
     df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
     
@@ -741,8 +742,8 @@ def rapport_råkaffe():
     query_probat_gc_samples = f""" IF 'None' = 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
-                            ,[HUMIDITY_1] AS [Vandprocent 1],[HUMIDITY_2] AS [Vandprocent 2],[HUMIDITY_3] AS [Vandprocent 3]
-                            ,[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
+                            ,[HUMIDITY_1] / 100000.0 AS [Vandprocent 1],[HUMIDITY_2] / 100000.0 AS [Vandprocent 2]
+                            ,[HUMIDITY_3] / 100000.0 AS [Vandprocent 3],[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
                             FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
                             WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
                             	AND [CONTRACT_NO] = '{req_reference_no}'
@@ -812,7 +813,7 @@ def rapport_råkaffe():
             df_temp_total = df_temp_total[column_order]
             # Write results to Word and Excel
             insert_dataframe_into_excel(df_temp_total, section_name, False)
-            add_section_to_word(df_temp_total, section_name, True, [-1,0])
+            add_section_to_word(df_temp_total, section_name, False, [-1,0])
             # Write status into log
             section_log_insert(section_id, 0)
         except Exception as e: # Insert error into log
@@ -912,7 +913,6 @@ def rapport_råkaffe():
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
-    
     
     # =============================================================================
     # Section 4: Mølleordrer
@@ -1194,10 +1194,13 @@ def rapport_råkaffe():
     section_id = 12
     section_name = get_section_name(section_id)
     column_order = ['Id','Risteri id','Person','Registreringstidspunkt','Syre','Krop','Aroma','Eftersmag','Robusta','Status','Bemærkning']
+    columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
     
     if get_section_status_code(df_ds_karakterer) == 99:
         try:
-            # String format datecolumn for export
+            # String format datecolumn for export and numeric formating
+            for col in columns_1_dec:
+                df_ds_karakterer[col] = df_ds_karakterer[col].apply(lambda x: number_format(x, 'dec_1'))
             df_ds_karakterer['Registreringstidspunkt'] = df_ds_karakterer['Registreringstidspunkt'].dt.strftime('%d-%m-%Y')
             df_ds_karakterer.sort_values(by=['Id'], inplace=True)
             # Write results to Word and Excel
@@ -1210,7 +1213,6 @@ def rapport_råkaffe():
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_ds_karakterer))
     
-    
     # =============================================================================
     # Section 22: Probat samples
     # =============================================================================
@@ -1218,22 +1220,24 @@ def rapport_råkaffe():
     section_name = get_section_name(section_id)
     column_order = ['Dato','Probat id','Volumen,Vandprocent 1','Vandprocent 2','Vandprocent 3'
                     ,'Bruger','Bemærkning']
+    columns_2_pct = ['Vandprocent 1','Vandprocent 2','Vandprocent 3']
     
     if get_section_status_code(df_probat_gc_samples) == 99:
         try:
             # String format datecolumn for export
+            for col in columns_2_pct:
+                df_probat_gc_samples[col] = df_probat_gc_samples[col].apply(lambda x: number_format(x, 'pct_2'))
             df_probat_gc_samples['Dato'] = df_probat_gc_samples['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_gc_samples.sort_values(by=['Probat id'], inplace=True)
             # Write results to Word and Excel
             insert_dataframe_into_excel (df_probat_gc_samples, section_name, False)
-            add_section_to_word(df_probat_gc_samples, section_name, False, [0])
+            add_section_to_word(df_probat_gc_samples, section_name, True, [0])
             # Write status into log
             section_log_insert(section_id, 0)
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_probat_gc_samples))
-    
     
     # =============================================================================
     # Section 18: Sektionslog
@@ -1258,10 +1262,10 @@ def rapport_råkaffe():
     
     #Save files
     excel_writer.save()
-    log_insert(script_name, f'Excel file {file_name} created')
+    # log_insert(script_name, f'Excel file {file_name} created')
     
     doc.save(path_file_doc)
-    log_insert(script_name, f'Word document {file_name} created')
+    # log_insert(script_name, f'Word document {file_name} created')
 
 # =============================================================================
 # Execute correct script type

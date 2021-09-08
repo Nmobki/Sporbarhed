@@ -738,8 +738,8 @@ df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_04)
 query_probat_gc_samples = f""" IF 'None' = 'None'
                         BEGIN
                         SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
-                        ,[HUMIDITY_1] AS [Vandprocent 1],[HUMIDITY_2] AS [Vandprocent 2],[HUMIDITY_3] AS [Vandprocent 3]
-                        ,[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
+                        ,[HUMIDITY_1] / 100000.0 AS [Vandprocent 1],[HUMIDITY_2] / 100000.0 AS [Vandprocent 2]
+                        ,[HUMIDITY_3] / 100000.0 AS [Vandprocent 3],[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
                         FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
                         WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
                         	AND [CONTRACT_NO] = '{req_reference_no}'
@@ -809,7 +809,7 @@ if get_section_status_code(df_probat_receiving) == 99:
         df_temp_total = df_temp_total[column_order]
         # Write results to Word and Excel
         insert_dataframe_into_excel(df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True, [-1,0])
+        add_section_to_word(df_temp_total, section_name, False, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
     except Exception as e: # Insert error into log
@@ -909,7 +909,6 @@ if get_section_status_code(df_probat_roast_output) == 99:
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_probat_roast_output))
-
 
 # =============================================================================
 # Section 4: Mølleordrer
@@ -1191,10 +1190,13 @@ else: # Write into log if no data is found or section is out of scope
 section_id = 12
 section_name = get_section_name(section_id)
 column_order = ['Id','Risteri id','Person','Registreringstidspunkt','Syre','Krop','Aroma','Eftersmag','Robusta','Status','Bemærkning']
+columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
 
 if get_section_status_code(df_ds_karakterer) == 99:
     try:
-        # String format datecolumn for export
+        # String format datecolumn for export and numeric formating
+        for col in columns_1_dec:
+            df_ds_karakterer[col] = df_ds_karakterer[col].apply(lambda x: number_format(x, 'dec_1'))
         df_ds_karakterer['Registreringstidspunkt'] = df_ds_karakterer['Registreringstidspunkt'].dt.strftime('%d-%m-%Y')
         df_ds_karakterer.sort_values(by=['Id'], inplace=True)
         # Write results to Word and Excel
@@ -1207,7 +1209,6 @@ if get_section_status_code(df_ds_karakterer) == 99:
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_ds_karakterer))
 
-
 # =============================================================================
 # Section 22: Probat samples
 # =============================================================================
@@ -1215,22 +1216,24 @@ section_id = 22
 section_name = get_section_name(section_id)
 column_order = ['Dato','Probat id','Volumen,Vandprocent 1','Vandprocent 2','Vandprocent 3'
                 ,'Bruger','Bemærkning']
+columns_2_pct = ['Vandprocent 1','Vandprocent 2','Vandprocent 3']
 
 if get_section_status_code(df_probat_gc_samples) == 99:
     try:
         # String format datecolumn for export
+        for col in columns_2_pct:
+            df_probat_gc_samples[col] = df_probat_gc_samples[col].apply(lambda x: number_format(x, 'pct_2'))
         df_probat_gc_samples['Dato'] = df_probat_gc_samples['Dato'].dt.strftime('%d-%m-%Y')
         df_probat_gc_samples.sort_values(by=['Probat id'], inplace=True)
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_probat_gc_samples, section_name, False)
-        add_section_to_word(df_probat_gc_samples, section_name, False, [0])
+        add_section_to_word(df_probat_gc_samples, section_name, True, [0])
         # Write status into log
         section_log_insert(section_id, 0)
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_probat_gc_samples))
-
 
 # =============================================================================
 # Section 18: Sektionslog
@@ -1259,35 +1262,6 @@ excel_writer.save()
 
 doc.save(path_file_doc)
 # log_insert(script_name, f'Word document {file_name} created')
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# Write into email log
-# =============================================================================
-dict_email_log = {'Filsti': filepath
-                  ,'Filnavn': file_name
-                  ,'Modtager': req_recipients
-                  ,'Emne': f'Anmodet rapport for ordre {req_reference_no}'
-                  ,'Forespørgsels_id': req_id
-                  ,'Note':req_note}
-# pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
-# log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
-
-# =============================================================================
-# Update request that dataprocessing has been completed
-# =============================================================================
-cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
-                  SET Data_færdigbehandlet = 1
-                  WHERE [Id] = {req_id}""")
-cursor_04.commit()
-# log_insert(script_name, f'Request id: {req_id} completed')
 
 # Exit script
 raise SystemExit(0)

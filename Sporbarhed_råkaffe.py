@@ -681,10 +681,10 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
         						  ON ILE_O.[Item No_] = I.[No_]
     						  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_], [Source No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (5,8)
-                              GROUP BY [Lot No_], [Document No_] )
+                              GROUP BY [Lot No_], [Document No_], [Source No_] )
                               ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (6,9)
@@ -698,6 +698,7 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               LEFT JOIN [DOC_CONS] AS DC
                                   ON L.[Lot No_] = DC.[Lot No_]
                               WHERE DC.[Document No_] IS NOT NULL
+								AND DC.[Source No_] NOT IN ('10401401','10401403','10502401','10502403')
                               GROUP BY DO.[Document No_] ,DC.[Document No_] """
 df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
 

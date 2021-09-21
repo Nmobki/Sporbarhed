@@ -265,11 +265,6 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
 						   AND PL.[Item Category Code] = 'RÅKAFFE' """
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
-
-# =============================================================================
-# For complete script below here
-# =============================================================================
-
 # Query section log for each section logged per script-run.
 # Query is only executed at the end of each class
 query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
@@ -281,6 +276,10 @@ query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
                        INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
                             ON SL.[Statuskode] = SS.[Id]
                        WHERE SL.[Forespørgsels_id] = {req_id} """
+
+# =============================================================================
+# For complete script below here
+# =============================================================================
 
 
 # General info from Navision

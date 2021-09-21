@@ -155,10 +155,9 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # Read data from request
 # =============================================================================
 query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager]
-                    ,[Referencenummer] AS [Ordrenummer],[Note_forespørgsel] 
+                    ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                     FROM [trc].[Sporbarhed_forespørgsel]
-                    WHERE [Forespørgsel_igangsat] IS NULL
-                    AND [Referencetype] = 0 AND [Forespørgselstype] = 0 """
+                    WHERE [Forespørgsel_igangsat] IS NULL """
 df_request = pd.read_sql(query_ds_request, con_04)
 
 # Exit script if no request data is found
@@ -169,15 +168,16 @@ if len(df_request) == 0:
 # Set request variables
 # =============================================================================
 req_type = df_request.loc[0, 'Forespørgselstype']
-req_order_no = df_request.loc[0, 'Ordrenummer']
+req_reference_no = df_request.loc[0, 'Referencenummer'].rstrip(' ')
 req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']
+req_modtagelse = df_request.loc[0, 'Modtagelse']
 req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
 script_name = 'Sporbarhed_færdigkaffe.py'
 timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-orders_top_level = [req_order_no]
+orders_top_level = [req_reference_no]
 orders_related = []
 
 # =============================================================================
@@ -193,10 +193,10 @@ log_insert(script_name, f'Request id: {req_id} initiated')
 # Variables for files generated
 # =============================================================================
 filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
-file_name = f'Rapport_{req_order_no}_{req_id}'
+file_name = f'Rapport_{req_reference_no}_{req_id}'
 
 doc = docx.Document()
-doc.add_heading(f'Rapport for produktionsordre {req_order_no}',0)
+doc.add_heading(f'Rapport for produktionsordre {req_reference_no}',0)
 doc.sections[0].header.paragraphs[0].text = f'{script_name}'
 doc.sections[0].footer.paragraphs[0].text = f'{timestamp}'
 doc.sections[0].page_width = docx.shared.Mm(297)
@@ -317,7 +317,7 @@ query_ds_samples = f""" SELECT KP.[Id],KP.[Ordrenummer],KP.[Registreringstidspun
                    LEFT JOIN [cof].[Smageskema] AS SK
                        ON KP.[Id] = SK.[Id_org]
                        AND SK.[Id_org_kildenummer] = 6
-                   WHERE KP.[Ordrenummer] = '{req_order_no}' """
+                   WHERE KP.[Ordrenummer] = '{req_reference_no}' """
 df_prøver = pd.read_sql(query_ds_samples, con_04)
 
 # All grades given for the requested order. Coalesce is to ensure that query
@@ -327,7 +327,7 @@ query_ds_karakterer = f""" SELECT [Id] ,[Dato] ,[Bruger] ,[Smag_Syre] AS [Syre]
                       ,[Smag_Eftersmag] AS [Eftersmag],[Smag_Robusta] AS [Robusta] ,[Bemærkning]
                       FROM [cof].[Smageskema]
                       WHERE [Referencetype] = 2	
-                          AND [Referencenummer] = '{req_order_no}'
+                          AND [Referencenummer] = '{req_reference_no}'
                           AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
                             [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
 df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
@@ -346,7 +346,7 @@ df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
 # Primary packaging material - valve for bag
 query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
                   FROM [cof].[Ventil_registrering]
-                  WHERE [Ordrenummer] = '{req_order_no}' """
+                  WHERE [Ordrenummer] = '{req_reference_no}' """
 df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
 
 # Query section log for each section logged per script-run.
@@ -368,7 +368,7 @@ query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
                        ,SUM( SD.[CounterGoodTrade] ) AS [Antal poser]
                        FROM [ComScaleDB].[dbo].[StatisticData] AS SD
                        INNER JOIN [dbo].[Statistic] AS S ON SD.[Statistic_ID] = S.[ID]
-                       WHERE S.[Order] = '{req_order_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
+                       WHERE S.[Order] = '{req_reference_no}' AND lower(S.[ArticleNumber]) NOT LIKE '%k'
                        GROUP BY S.[Order],SD.[Nominal],SD.[Tare] )
                        SELECT CTE.[Total vægt] / 1000.0 AS [Total vægt kg],CTE.[Antal poser]
                        ,CASE WHEN CTE.[Antal poser] = 0 
@@ -422,7 +422,7 @@ query_nav_generelt = f""" WITH [RECEPT] AS (
                     	AND ICR.[Cross-Reference Type] = 3
                      LEFT JOIN [RECEPT] ON PO.[No_] = RECEPT.[Prod_ Order No_]
                      LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
-                     WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_order_no}' """
+                     WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_reference_no}' """
 df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
 
 production_date = df_nav_generelt['Produktionsdato'].iloc[0]
@@ -455,7 +455,7 @@ query_probat_orders = f""" WITH [CTE_ORDERS_PACK] AS (
                        SELECT [Ordrenummer],[Relateret ordre],[Kilde]
                        FROM [CTE_ORDERS_PACK]
                        WHERE [Relateret ordre] IN (SELECT [Relateret ordre] 
-                       FROM [CTE_ORDERS_PACK] WHERE [Ordrenummer] = '{req_order_no}'))
+                       FROM [CTE_ORDERS_PACK] WHERE [Ordrenummer] = '{req_reference_no}'))
 					   SELECT * 
 					   FROM [CTE_ORDERS]
                        WHERE [Relateret ordre] <> 'Retour Ground'
@@ -477,7 +477,7 @@ probat_orders_related = df_probat_orders['Relateret ordre'].unique().tolist()
 query_nav_order_related = f"""WITH [CTE_ORDER] AS (SELECT [Prod_ Order No_]
                    ,[Reserved Prod_ Order No_]
                    FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
-                   WHERE [Prod_ Order No_] = '{req_order_no}' 
+                   WHERE [Prod_ Order No_] = '{req_reference_no}' 
                    AND [Invalid] = 0)
                    SELECT [Prod_ Order No_] AS [Ordrenummer] 
                    ,[Reserved Prod_ Order No_] AS [Relateret ordre]
@@ -639,7 +639,7 @@ query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
                       AND IUM.[Code] = 'PS'
                   WHERE ILE.[Order Type] = 1
                 	  AND ILE.[Entry Type] = 6
-                      AND ILE.[Order No_] = '{req_order_no}' """
+                      AND ILE.[Order No_] = '{req_reference_no}' """
 df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
 
 # Primary packaging components used for the originally requested order
@@ -657,7 +657,7 @@ query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
                            AND POAC.[Prod_ Order Component Line No_] = POC.[Line No_]
                        INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                            ON POC.[Item No_] = I.[No_]
-                       WHERE POAC.[Prod_ Order No_] = '{req_order_no}' """
+                       WHERE POAC.[Prod_ Order No_] = '{req_reference_no}' """
 df_nav_components = pd.read_sql(query_nav_components, con_nav)
 
 # Components used for the originally requested order
@@ -668,7 +668,7 @@ query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
                         FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
                         INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                         	ON ILE.[Item No_] = I.[No_]
-                        WHERE ILE.[Order No_] = '{req_order_no}'
+                        WHERE ILE.[Order No_] = '{req_reference_no}'
                         	AND ILE.[Entry Type] = 5
                         GROUP BY ILE.[Item No_] ,I.[Description],I.[Base Unit of Measure] """
 df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
@@ -756,7 +756,7 @@ if get_section_status_code(df_nav_generelt) == 99:
     try:
         df_nav_generelt['Pakkelinje'] = df_results_generelt['Pakkelinje'].iloc[0]
         df_nav_generelt['Pakketidspunkt'] = df_results_generelt['Pakketidspunkt'].iloc[0]
-        df_nav_generelt['Ordrenummer'] = req_order_no
+        df_nav_generelt['Ordrenummer'] = req_reference_no
         df_nav_generelt['Smagning status'] = df_results_generelt['Smagning status'].iloc[0]
         df_nav_generelt['Opstartssilo'] = df_results_generelt['Opstartssilo'].iloc[0]
         df_nav_generelt['Igangsat af'] = df_results_generelt['Igangsat af'].iloc[0]
@@ -1369,7 +1369,7 @@ log_insert(script_name, f'Word document {file_name} created')
 dict_email_log = {'Filsti': filepath
                   ,'Filnavn': file_name
                   ,'Modtager': req_recipients
-                  ,'Emne': f'Anmodet rapport for ordre {req_order_no}'
+                  ,'Emne': f'Anmodet rapport for ordre {req_reference_no}'
                   ,'Forespørgsels_id': req_id
                   ,'Note':req_note}
 pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)

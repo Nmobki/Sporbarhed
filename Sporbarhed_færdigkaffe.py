@@ -257,6 +257,18 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
                            AND I.[Item Category Code] <> 'RÅKAFFE' """
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
+# Query section log for each section logged per script-run.
+# Query is only executed at the end of the script
+query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
+                       ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
+                       ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
+                       FROM [trc].[Sporbarhed_sektion_log] AS SL
+                       INNER JOIN [trc].[Sporbarhed_sektion] AS S
+                         	ON SL.[Sektion] = S.[Id]
+                       INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
+                            ON SL.[Statuskode] = SS.[Id]
+                       WHERE SL.[Forespørgsels_id] = {req_id} """
+
 
 # =============================================================================
 # Queries for different parts of report
@@ -348,18 +360,6 @@ query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
                   FROM [cof].[Ventil_registrering]
                   WHERE [Ordrenummer] = '{req_reference_no}' """
 df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
-
-# Query section log for each section logged per script-run.
-# Query is only executed at the end of the script
-query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
-                       ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
-                       ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
-                       FROM [trc].[Sporbarhed_sektion_log] AS SL
-                       INNER JOIN [trc].[Sporbarhed_sektion] AS S
-                         	ON SL.[Sektion] = S.[Id]
-                       INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
-                            ON SL.[Statuskode] = SS.[Id]
-                       WHERE SL.[Forespørgsels_id] = {req_id} """
 
 # Order statistics from Comscale. Only for good bags (trade)
 query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]

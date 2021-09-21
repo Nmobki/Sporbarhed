@@ -168,7 +168,7 @@ if len(df_request) == 0:
 # Set request variables
 # =============================================================================
 req_type = df_request.loc[0, 'Forespørgselstype']
-req_reference_no = df_request.loc[0, 'Referencenummer']
+req_reference_no = df_request.loc[0, 'Referencenummer'].rstrip(' ')
 req_recipients = df_request.loc[0, 'Rapport_modtager']
 req_note = df_request.loc[0, 'Note_forespørgsel']
 req_id = df_request.loc[0, 'Id']

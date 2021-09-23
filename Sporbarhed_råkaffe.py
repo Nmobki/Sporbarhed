@@ -106,6 +106,11 @@ def convert_placeholders_word(string):
     else:
         return string
 
+# Strip comma from commaseparated strings
+def strip_comma_from_string(text):
+    text = text.rstrip(',')
+    return text.lstrip(',')
+
 # Add dataframe to word document
 def add_section_to_word(dataframe, section, pagebreak, rows_to_bold):
     # Add section header
@@ -591,12 +596,14 @@ req_orders_total = string_to_sql(orders_top_level)
 # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
 # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
 # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Document No_]
+
+#First we find all relevant lot nos and store in string to be used in queries below
+query_nav_lotnos_total = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Order No_] IN ({req_orders_total})
                               AND [Entry Type] = 6
                               UNION ALL
-                              SELECT ILE_O.[Lot No_],ILE_O.[Document No_]
+                              SELECT ILE_O.[Lot No_]
                               FROM [LOT_ORG]
                               INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
                                   ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
@@ -605,11 +612,19 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Docume
                             	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
                                   AND ILE_O.[Entry Type] IN (6,9)
                               INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-									  ON ILE_O.[Item No_] = I.[No_]
+								  ON ILE_O.[Item No_] = I.[No_]
 								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                              ,[LOT_SINGLE] AS ( SELECT [Lot No_],[Document No_] AS [Ordrenummer]
-                              FROM [LOT_ORG] GROUP BY [Lot No_],[Document No_] )
-                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn],[LOT_SINGLE].[Ordrenummer]
+                              SELECT [Lot No_] AS [Lot]
+                              FROM [LOT_ORG] GROUP BY [Lot No_] """
+df_nav_lotnos_total = pd.read_sql(query_nav_lotnos_total, con_nav)
+nav_lotnots_total_sql_string = string_to_sql(df_nav_lotnos_total['Lot'].unique().tolist())
+
+# Find finished goods
+query_nav_færdigvaretilgang = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
+							  WHERE [Entry Type] IN (6,9)
+							  GROUP BY [Lot No_], [Document No_])
+                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
                         	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight]
                         		ELSE 0 END) AS [Produceret]
@@ -625,29 +640,18 @@ query_nav_færdigvaretilgang = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Docume
                             	ON ILE.[Item No_] = I.[No_]
                             INNER JOIN [LOT_SINGLE]
                             	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                            GROUP BY ILE.[Item No_],I.[Description],[LOT_SINGLE].[Ordrenummer] """
+							WHERE ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
+                            GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
 df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
 
 # Recursive query to get all customer who purchased identified lotnumbers.
 # See explanation of query above
-query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Document No_]
+query_nav_debitorer = f"""   WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
                       FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                      WHERE [Order No_] IN({req_orders_total}) AND [Entry Type] = 6
-                      UNION ALL
-                      SELECT ILE_O.[Lot No_],ILE_O.[Document No_]
-                      FROM [LOT_ORG]
-                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
-                          ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
-                    	  AND [ILE_C].[Entry Type] IN (5,8)
-                      INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
-                    	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                    	  AND ILE_O.[Entry Type] IN (6,9) 
-                      INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-							  ON ILE_O.[Item No_] = I.[No_]
-						  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                      ,[LOT_SINGLE] AS ( SELECT [Lot No_],[Document No_] AS [Produktionsordrenummer]
-                      FROM [LOT_ORG] GROUP BY [Lot No_],[Document No_] )
-                      SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn], [LOT_SINGLE].[Produktionsordrenummer]
+					  WHERE [Entry Type] IN (6,9) 
+					  GROUP BY [Lot No_],[Document No_] )
+
+                      SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn], LOT_SINGLE.[Produktionsordrenummer]
                     	  ,ILE.[Posting Date] AS [Dato]
                     	  ,ILE.[Item No_] AS [Varenummer]
                     	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
@@ -660,7 +664,8 @@ query_nav_debitorer = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_],[Document No_]
                       INNER JOIN [dbo].[BKI foods a_s$Customer] (NOLOCK) AS C
                     	  ON ILE.[Source No_] = C.[No_]
                       WHERE ILE.[Entry Type] = 1
-                      GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_],[LOT_SINGLE].[Produktionsordrenummer] """
+						AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
+                      GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer]  """
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
 # Query to show relation between requested order and any orders which have used it as components
@@ -676,14 +681,11 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                                   AND [ILE_C].[Entry Type] IN (5,8)
                               INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
                             	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                                  AND ILE_O.[Entry Type] IN (6,9)
-                              INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-        						  ON ILE_O.[Item No_] = I.[No_]
-    						  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_], [Source No_]
+                                  AND ILE_O.[Entry Type] IN (6,9) )
+                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (5,8)
-                              GROUP BY [Lot No_], [Document No_], [Source No_] )
+                              GROUP BY [Lot No_], [Document No_] )
                               ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (6,9)
@@ -697,7 +699,6 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               LEFT JOIN [DOC_CONS] AS DC
                                   ON L.[Lot No_] = DC.[Lot No_]
                               WHERE DC.[Document No_] IS NOT NULL
-								AND DC.[Source No_] NOT IN ('10401401','10401403','10502401','10502403')
                               GROUP BY DO.[Document No_] ,DC.[Document No_] """
 df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
 
@@ -1001,11 +1002,13 @@ if get_section_status_code(df_nav_færdigvaretilgang) == 99:
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
+        print('xyasdada')
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
     section_log_insert(section_id, get_section_status_code(df_temp_total))
 
+print('a')
 # =============================================================================
 # Section 7: Debitorer
 # =============================================================================
@@ -1018,30 +1021,41 @@ columns_1_dec = ['Enheder','Kilo']
 if get_section_status_code(df_nav_debitorer) == 99:
     try:
         # Concat Order nos to one string
+        print(1)
         df_nav_debitorer = df_nav_debitorer.groupby(['Debitornummer','Debitornavn','Dato','Varenummer']).agg(
             {'Produktionsordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
-             'Enheder': 'sum',
-             'Kilo': 'sum'
+              'Enheder': 'sum',
+              'Kilo': 'sum'
             }).reset_index()
+        print(2)
         df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.rstrip(','))
         df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.lstrip(','))
+        print(3)
         # Create total for dataframe
         dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
                               'Kilo':[df_nav_debitorer['Kilo'].sum()]}
         # Add varenavn
+        print(5)
         df_nav_debitorer['Varenavn'] = df_nav_debitorer['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
+        print(6)
         # Look up column values and string format datecolumn for export
         df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
+        print(7)
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
+        print(8)
         df_temp_total = df_temp_total[column_order]
         df_temp_total.sort_values(by=['Varenummer','Debitornummer','Dato'], inplace=True)
+        print(9)
         # Data formating
         for col in columns_1_dec:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
+        print(10)
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
+        print(11)
         add_section_to_word(df_temp_total, section_name, True, [-1,0])
+        print(12)
         # Write status into log
         section_log_insert(section_id, 0)
     except Exception as e: # Insert error into log
@@ -1258,10 +1272,10 @@ else: # Write into log if no data is found or section is out of scope
 
 #Save files
 excel_writer.save()
-# log_insert(script_name, f'Excel file {file_name} created')
+log_insert(script_name, f'Excel file {file_name} created')
 
 doc.save(path_file_doc)
-# log_insert(script_name, f'Word document {file_name} created')
+log_insert(script_name, f'Word document {file_name} created')
 
 # Exit script
 raise SystemExit(0)

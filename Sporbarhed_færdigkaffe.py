@@ -596,20 +596,7 @@ query_nav_debitorer = f"""   WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document 
 df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
 
 # Query to show relation between requested order and any orders which have used it as components
-query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
-                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                              WHERE [Order No_] IN ({req_orders_total})
-                              AND [Entry Type] = 6
-                              UNION ALL
-                              SELECT ILE_O.[Lot No_]
-                              FROM [LOT_ORG]
-                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
-                                  ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
-                                  AND [ILE_C].[Entry Type] IN (5,8)
-                              INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
-                            	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                                  AND ILE_O.[Entry Type] IN (6,9) )
-                              ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+query_nav_orders = f"""  WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                               WHERE [Entry Type] IN (5,8)
                               GROUP BY [Lot No_], [Document No_] )
@@ -620,12 +607,13 @@ query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                               SELECT DO.[Document No_] AS [Relateret ordre]
                               ,DC.[Document No_] AS [Ordrenummer]
                               ,'Navision forbrug' AS [Kilde]
-                              FROM [LOT_ORG] AS L
+                              FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
                               INNER JOIN [DOC_OUT] AS DO
-                                  ON L.[Lot No_] = DO.[Lot No_]
+                                  ON ILE.[Lot No_] = DO.[Lot No_]
                               LEFT JOIN [DOC_CONS] AS DC
-                                  ON L.[Lot No_] = DC.[Lot No_]
+                                  ON ILE.[Lot No_] = DC.[Lot No_]
                               WHERE DC.[Document No_] IS NOT NULL
+							  AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                               GROUP BY DO.[Document No_] ,DC.[Document No_] """
 df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
 

@@ -100,6 +100,11 @@ def convert_placeholders_word(string):
     else:
         return string
 
+# Strip comma from commaseparated strings
+def strip_comma_from_string(text):
+    text = text.rstrip(',')
+    return text.lstrip(',')
+
 # Add dataframe to word document
 def add_section_to_word(dataframe, section, pagebreak, rows_to_bold):
     # Add section header
@@ -860,6 +865,7 @@ section_id = 3
 section_name = get_section_name(section_id)
 column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
 columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
+columns_strip = ['Ordrenummer']
 
 if get_section_status_code(df_nav_færdigvaretilgang) == 99:
     try:
@@ -871,8 +877,9 @@ if get_section_status_code(df_nav_færdigvaretilgang) == 99:
             'Restlager': 'sum',
             'Regulering & ompak': 'sum'
            }).reset_index()
-        df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.rstrip(','))
-        df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.lstrip(','))
+        # Remove trailing and leading commas
+        for col in columns_strip:
+            df_nav_færdigvaretilgang[col] = df_nav_færdigvaretilgang[col].apply(lambda x: strip_comma_from_string(x))
         # Create total for dataframe
         dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                  'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
@@ -903,6 +910,7 @@ section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
                 'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
+columns_strip = ['Dato','Silo','Mølle']
 
 if get_section_status_code(df_probat_ulg) == 99:
     try:
@@ -919,12 +927,9 @@ if get_section_status_code(df_probat_ulg) == 99:
                                                     'Mølle': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                     'Kilo': 'sum'
                                                    }).reset_index()
-        df_probat_ulg['Dato'] = df_probat_ulg['Dato'].apply(lambda x: x.rstrip(','))
-        df_probat_ulg['Dato'] = df_probat_ulg['Dato'].apply(lambda x: x.lstrip(','))
-        df_probat_ulg['Silo'] = df_probat_ulg['Silo'].apply(lambda x: x.rstrip(','))
-        df_probat_ulg['Silo'] = df_probat_ulg['Silo'].apply(lambda x: x.lstrip(','))
-        df_probat_ulg['Mølle'] = df_probat_ulg['Mølle'].apply(lambda x: x.rstrip(','))
-        df_probat_ulg['Mølle'] = df_probat_ulg['Mølle'].apply(lambda x: x.lstrip(','))
+        # Remove trailing and leading commas
+        for col in columns_strip:
+            df_probat_ulg[col] = df_probat_ulg[col].apply(lambda x: strip_comma_from_string(x))
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulg, pd.DataFrame.from_dict(data=dict_mølle_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
@@ -940,7 +945,7 @@ if get_section_status_code(df_probat_ulg) == 99:
     except Exception as e: # Insert error into log
         section_log_insert(section_id, 2, e)
 else: # Write into log if no data is found or section is out of scope
-    section_log_insert(section_id, get_section_status_code(df_temp_total))
+    section_log_insert(section_id, get_section_status_code(df_probat_ulg))
 
 # =============================================================================
 # Section 5: Risteordrer
@@ -950,6 +955,7 @@ section_name = get_section_name(section_id)
 column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
                 'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
 columns_1_dec = ['Kilo']
+columns_strip = ['Dato','Silo']
 
 if get_section_status_code(df_probat_ulr) == 99:
     try:
@@ -965,10 +971,9 @@ if get_section_status_code(df_probat_ulr) == 99:
                                                     'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                     'Kilo': 'sum'
                                                    }).reset_index()
-        df_probat_ulr['Dato'] = df_probat_ulr['Dato'].apply(lambda x: x.rstrip(','))
-        df_probat_ulr['Dato'] = df_probat_ulr['Dato'].apply(lambda x: x.lstrip(','))
-        df_probat_ulr['Silo'] = df_probat_ulr['Silo'].apply(lambda x: x.rstrip(','))
-        df_probat_ulr['Silo'] = df_probat_ulr['Silo'].apply(lambda x: x.lstrip(','))
+        # Remove trailing and leading commas
+        for col in columns_strip:
+            df_probat_ulr[col] = df_probat_ulr[col].apply(lambda x: strip_comma_from_string(x))
         # Create temp dataframe with total
         df_temp_total = pd.concat([df_probat_ulr, pd.DataFrame.from_dict(data=dict_rister_total, orient='columns')])
         df_temp_total = df_temp_total[column_order]
@@ -1026,6 +1031,7 @@ section_name = get_section_name(section_id)
 column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Varenavn','Produktionsordrenummer',
                     'Enheder','Kilo']
 columns_1_dec = ['Enheder','Kilo']
+columns_strip = ['Produktionsordrenummer']
 
 if get_section_status_code(df_nav_debitorer) == 99:
     try:
@@ -1035,8 +1041,9 @@ if get_section_status_code(df_nav_debitorer) == 99:
              'Enheder': 'sum',
              'Kilo': 'sum'
             }).reset_index()
-        df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.rstrip(','))
-        df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.lstrip(','))
+        # Remove trailing and leading commas
+        for col in columns_strip:
+            df_nav_debitorer[col] = df_nav_debitorer[col].apply(lambda x: strip_comma_from_string(x))
         # Create total for dataframe
         dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
                               'Kilo':[df_nav_debitorer['Kilo'].sum()]}

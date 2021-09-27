@@ -991,7 +991,7 @@ if get_section_status_code(df_nav_færdigvaretilgang) == 99:
             df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
         # Write results to Word and Excel
         insert_dataframe_into_excel (df_temp_total, section_name, False)
-        add_section_to_word(df_temp_total, section_name, True, [-1,0])
+        # add_section_to_word(df_temp_total, section_name, True, [-1,0])
         # Write status into log
         section_log_insert(section_id, 0)
     except Exception as e: # Insert error into log

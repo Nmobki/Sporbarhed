@@ -1496,6 +1496,7 @@ def rapport_råkaffe():
     roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
     sql_roast_orders = string_to_sql(roast_orders)
     # Green coffee used for roasting
+    
     query_probat_roast_input = f""" IF 'None' = 'None'
                                 BEGIN
                                 SELECT [CUSTOMER_CODE] AS [Varenummer]
@@ -1530,6 +1531,7 @@ def rapport_råkaffe():
     else:
         df_probat_roast_input = pd.DataFrame()
     # Output from roasters
+    
     query_probat_roast_output = f""" SELECT
                                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                                 ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
@@ -1764,20 +1766,7 @@ def rapport_råkaffe():
     df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
     
     # Query to show relation between requested order and any orders which have used it as components
-    query_nav_orders = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                                  WHERE [Order No_] IN ({req_orders_total})
-                                  AND [Entry Type] = 6
-                                  UNION ALL
-                                  SELECT ILE_O.[Lot No_]
-                                  FROM [LOT_ORG]
-                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
-                                      ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
-                                      AND [ILE_C].[Entry Type] IN (5,8)
-                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
-                                	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                                      AND ILE_O.[Entry Type] IN (6,9) )
-                                  ,[DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+    query_nav_orders = f"""  WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Entry Type] IN (5,8)
                                   GROUP BY [Lot No_], [Document No_] )
@@ -1788,12 +1777,13 @@ def rapport_råkaffe():
                                   SELECT DO.[Document No_] AS [Relateret ordre]
                                   ,DC.[Document No_] AS [Ordrenummer]
                                   ,'Navision forbrug' AS [Kilde]
-                                  FROM [LOT_ORG] AS L
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
                                   INNER JOIN [DOC_OUT] AS DO
-                                      ON L.[Lot No_] = DO.[Lot No_]
+                                      ON ILE.[Lot No_] = DO.[Lot No_]
                                   LEFT JOIN [DOC_CONS] AS DC
-                                      ON L.[Lot No_] = DC.[Lot No_]
+                                      ON ILE.[Lot No_] = DC.[Lot No_]
                                   WHERE DC.[Document No_] IS NOT NULL
+    							  AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
     df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
     
@@ -1851,7 +1841,6 @@ def rapport_råkaffe():
                                 AND [DELIVERY_NAME] = '{req_modtagelse}'
                             END """
     df_probat_gc_samples = pd.read_sql(query_probat_gc_samples, con_probat)
-    
     
     # =============================================================================
     # Section 1: Generelt
@@ -1920,6 +1909,8 @@ def rapport_råkaffe():
     section_name = get_section_name(section_id)
     column_order = ['Silo','Dato','Kilo','Restlager']
     columns_1_dec = ['Kilo','Restlager']
+    columns_strip = ['Dato']
+    
     if get_section_status_code(df_probat_processing) == 99:
         try:
             # Apply column formating for date column before concat
@@ -1931,8 +1922,9 @@ def rapport_råkaffe():
                  'Restlager': 'sum',
                  'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
                  }).reset_index()
-            df_probat_processing['Dato'] = df_probat_processing['Dato'].apply(lambda x: x.rstrip(','))
-            df_probat_processing['Dato'] = df_probat_processing['Dato'].apply(lambda x: x.lstrip(','))
+            # Remove trailing an dleading commas from strings
+            for col in columns_strip:
+                df_probat_processing[col] = df_probat_processing[col].apply(lambda x: strip_comma_from_string(x))
             # Create total for dataframe
             dict_modtagelse_total = {'Kilo': [df_probat_processing['Kilo'].sum()],
                                      'Restlager': [df_probat_processing['Restlager'].sum()]}
@@ -1960,6 +1952,7 @@ def rapport_råkaffe():
     column_order = ['Varenummer','Varenavn','Dato','Rister','Ordrenummer','Silo',
                     'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
     columns_1_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
+    columns_strip = ['Dato','Silo']
     
     if get_section_status_code(df_probat_roast_output) == 99:
         try:
@@ -1980,8 +1973,8 @@ def rapport_råkaffe():
                                              suffixes = ('' ,'_R')
                                              )
             #Column formating and lookups
-            df_probat_roast_total['Dato'] = df_probat_roast_total['Dato'].apply(lambda x: x.rstrip(','))
-            df_probat_roast_total['Dato'] = df_probat_roast_total['Dato'].apply(lambda x: x.lstrip(','))
+            for col in columns_strip:
+                df_probat_roast_total[col] = df_probat_roast_total[col].apply(lambda x: strip_comma_from_string(x))
             df_probat_roast_total['Varenavn'] = df_probat_roast_total['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
             # Create total for dataframe
             dict_risteordrer_total = {'Kilo råkaffe': df_probat_roast_total['Kilo råkaffe'].sum(),
@@ -2013,6 +2006,7 @@ def rapport_råkaffe():
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Ordrenummer','Dato','Silo','Kilo']
     columns_1_dec = ['Kilo']
+    columns_strip = ['Dato','Silo']
     
     if get_section_status_code(df_probat_grinding_input) == 99:
         try:
@@ -2035,10 +2029,8 @@ def rapport_råkaffe():
                                              suffixes = ('' ,'_R')
                                              )
             #Column formating and lookups
-            df_probat_grinding_total['Dato'] = df_probat_grinding_total['Dato'].apply(lambda x: x.rstrip(','))
-            df_probat_grinding_total['Dato'] = df_probat_grinding_total['Dato'].apply(lambda x: x.lstrip(','))
-            df_probat_grinding_total['Silo'] = df_probat_grinding_total['Silo'].apply(lambda x: x.rstrip(','))
-            df_probat_grinding_total['Silo'] = df_probat_grinding_total['Silo'].apply(lambda x: x.lstrip(','))
+            for col in columns_strip:
+                df_probat_grinding_total[col] = df_probat_grinding_total[col].apply(lambda x: strip_comma_from_string(x))
             df_probat_grinding_total['Varenavn'] = df_probat_grinding_total['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
             # Create total for dataframe
             dict_mølleordrer_total = {'Kilo': df_probat_grinding_total['Kilo'].sum()}
@@ -2067,6 +2059,7 @@ def rapport_råkaffe():
     section_name = get_section_name(section_id)
     column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
+    columns_strip = ['Ordrenummer']
     
     if get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
@@ -2078,8 +2071,9 @@ def rapport_råkaffe():
                  'Restlager': 'sum',
                  'Regulering & ompak': 'sum'
                 }).reset_index()
-            df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.rstrip(','))
-            df_nav_færdigvaretilgang['Ordrenummer'] = df_nav_færdigvaretilgang['Ordrenummer'].apply(lambda x: x.lstrip(','))
+            # Remove trailing and leading commas
+            for col in columns_strip:
+                df_nav_færdigvaretilgang[col] = df_nav_færdigvaretilgang[col].apply(lambda x: strip_comma_from_string(x))
             # Create total for dataframe
             dict_færdigvare_total = {'Produceret': [df_nav_færdigvaretilgang['Produceret'].sum()],
                                      'Salg': [df_nav_færdigvaretilgang['Salg'].sum()],
@@ -2097,13 +2091,12 @@ def rapport_råkaffe():
             add_section_to_word(df_temp_total, section_name, True, [-1,0])
             # Write status into log
             section_log_insert(section_id, 0)
-            print('xyasdada')
         except Exception as e: # Insert error into log
             section_log_insert(section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         section_log_insert(section_id, get_section_status_code(df_temp_total))
     
-    print('a')
+    
     # =============================================================================
     # Section 7: Debitorer
     # =============================================================================
@@ -2112,45 +2105,36 @@ def rapport_råkaffe():
     column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Varenavn','Produktionsordrenummer',
                     'Enheder','Kilo']
     columns_1_dec = ['Enheder','Kilo']
+    columns_strip = ['Produktionsordrenummer']
     
     if get_section_status_code(df_nav_debitorer) == 99:
         try:
             # Concat Order nos to one string
-            print(1)
             df_nav_debitorer = df_nav_debitorer.groupby(['Debitornummer','Debitornavn','Dato','Varenummer']).agg(
                 {'Produktionsordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
                   'Enheder': 'sum',
                   'Kilo': 'sum'
                 }).reset_index()
-            print(2)
-            df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.rstrip(','))
-            df_nav_debitorer['Produktionsordrenummer'] = df_nav_debitorer['Produktionsordrenummer'].apply(lambda x: x.lstrip(','))
-            print(3)
+            # Remove trailing and leading commas
+            for col in columns_strip:
+                df_nav_debitorer[col] = df_nav_debitorer[col].apply(lambda x: strip_comma_from_string(x))
             # Create total for dataframe
             dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
                                   'Kilo':[df_nav_debitorer['Kilo'].sum()]}
             # Add varenavn
-            print(5)
             df_nav_debitorer['Varenavn'] = df_nav_debitorer['Varenummer'].apply(get_nav_item_info, field='Beskrivelse')
-            print(6)
             # Look up column values and string format datecolumn for export
             df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
-            print(7)
             # Create temp dataframe with total
             df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
-            print(8)
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer','Debitornummer','Dato'], inplace=True)
-            print(9)
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: number_format(x, 'dec_1'))
-            print(10)
             # Write results to Word and Excel
             insert_dataframe_into_excel (df_temp_total, section_name, False)
-            print(11)
             add_section_to_word(df_temp_total, section_name, True, [-1,0])
-            print(12)
             # Write status into log
             section_log_insert(section_id, 0)
         except Exception as e: # Insert error into log

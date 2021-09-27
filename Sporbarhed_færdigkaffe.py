@@ -107,6 +107,7 @@ def strip_comma_from_string(text):
 
 # Add dataframe to word document
 def add_section_to_word(dataframe, section, pagebreak, rows_to_bold):
+    pass
     # Add section header
     doc.add_heading(section, 1)
     # Add a table with an extra row for headers

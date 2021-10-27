@@ -41,7 +41,7 @@ dict_temp_silos = {
             ,'Ordrenummer': ['O1','O2','O3','04']
             }
 df_temp_silos = pd.DataFrame.from_dict(dict_temp_silos)
-#Slutdato 2 skal implementeres i sidste udgave. Det giver ikke mening at spore på noget, der er tilsæt efter produktion
+#Slutdato 2 skal implementeres i sidste udgave. Det giver ikke mening at spore på noget, der er tilsat efter produktion
 df_temp_silos['Slutdato2'] = df_temp_silos[['Dato','Slutdato']].min(axis=1)
 
 print(df_temp_silos)
@@ -79,8 +79,43 @@ def get_nav_order_info(order_no):
         return None
 
 
+#**********************************************************************************************************************************************************
 
 
+# =============================================================================
+# New functions - to be implemented in main script
+# =============================================================================
+def get_rework_silos():
+    pass
+
+
+def get_rework_prøvesmagning(dataframe):
+    if len(dataframe) == 0:
+        pass
+    
+    query = f""" SELECT	RP.[Produktionsordrenummer]
+            FROM [cof].[Rework_tilgang] AS RT
+            INNER JOIN [cof].[Rework_prøvesmagning] AS RP
+                ON RT.[Referencenummer] = RP.[Referencenummer]
+            WHERE RT.[Kilde] = 0
+                AND RT.[Silo] = '401'
+                AND DATEADD(D, DATEDIFF(D, 0, RT.[Registreringstidspunkt] ), 0) BETWEEN '2021-09-21' AND '2021-09-21'
+            GROUP BY RP.[Produktionsordrenummer] """
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i in df_temp_silos.index:
+    print(df_temp_silos['Startdato'][i], i)
 
 
 

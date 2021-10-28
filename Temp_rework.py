@@ -34,9 +34,9 @@ engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
 # =============================================================================
 
 dict_temp_silos = {
-            'Dato': ['2021-09-19','2021-09-20','2021-09-17','2021-09-16']
+            'Dato': ['2021-09-21','2021-09-22','2021-09-17','2021-09-16']
             ,'Startdato': ['2021-09-17','2021-09-20','2021-09-17','2021-09-10']
-            ,'Slutdato': ['2021-09-20','2021-09-25','2021-09-21','2021-09-16']
+            ,'Slutdato': ['2021-09-21','2021-09-25','2021-09-21','2021-09-16']
             ,'Silo': ['401','401','511','512'] 
             ,'Ordrenummer': ['O1','O2','O3','04']
             }
@@ -89,33 +89,50 @@ def get_rework_silos():
     pass
 
 
-def get_rework_prøvesmagning(dataframe):
-    if len(dataframe) == 0:
-        pass
+def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
+    if None in (start_date, end_date, silo):
+        return None
+    else:
+        query = f""" SELECT	RP.[Produktionsordrenummer]
+                FROM [cof].[Rework_tilgang] AS RT
+                INNER JOIN [cof].[Rework_prøvesmagning] AS RP
+                    ON RT.[Referencenummer] = RP.[Referencenummer]
+                WHERE RT.[Kilde] = 0
+                    AND RT.[Silo] = '{silo}'
+                    AND DATEADD(D, DATEDIFF(D, 0, RT.[Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY RP.[Produktionsordrenummer] """
+        df_temp = pd.read_sql(query, con_04)
+        if len(df_temp) == 0:
+            return None
+        else:
+            df_temp['Silo'] = silo
+            df_temp['Ordrenummer'] = order_no
+            return df_temp
+
+
+
+
+
+
+
+
+
+
+
+
+if len(df_temp_silos) > 0:
+    for i in df_temp_silos.index:
+        startdato = df_temp_silos['Startdato'][i]
+        slutdato = df_temp_silos['Slutdato2'][i]
+        silo = df_temp_silos['Silo'][i]
+        ordrenummer = df_temp_silos['Ordrenummer'][i]
+        # print(df_temp_silos['Startdato'][i], i)
+        
+        print(get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer))
+        get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer)
+        
     
-    query = f""" SELECT	RP.[Produktionsordrenummer]
-            FROM [cof].[Rework_tilgang] AS RT
-            INNER JOIN [cof].[Rework_prøvesmagning] AS RP
-                ON RT.[Referencenummer] = RP.[Referencenummer]
-            WHERE RT.[Kilde] = 0
-                AND RT.[Silo] = '401'
-                AND DATEADD(D, DATEDIFF(D, 0, RT.[Registreringstidspunkt] ), 0) BETWEEN '2021-09-21' AND '2021-09-21'
-            GROUP BY RP.[Produktionsordrenummer] """
-
-
-
-
-
-
-
-
-
-
-
-
-
-for i in df_temp_silos.index:
-    print(df_temp_silos['Startdato'][i], i)
+#    Kør hver funktion og gem dem i en samlet dataframe
 
 
 

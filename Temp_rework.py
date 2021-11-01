@@ -82,9 +82,30 @@ def get_nav_order_info(order_no):
 # =============================================================================
 # New functions - to be implemented in main script
 # =============================================================================
-def get_rework_silos():
+def get_silo_last_empty(silo, date):
+    query = f""" """
+    df = pd.read_sql(query, con_probat)
+    
+    if len(df) == 0:
+        return None
+    else:
+        return 'string' # Change this..
+
+def get_rework_silos(orders_string):
+    query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
+                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                WHERE [SOURCE_NAME] IN ('511','512') AND [ORDER_NAME] IN ({orders_string})
+                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) ,[SOURCE_NAME] ,[ORDER_NAME]
+                UNION ALL
+                SELECT	DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                ,[SOURCE] ,[ORDER_NAME]
+                FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                WHERE [SOURCE] in ('401','403') AND [ORDER_NAME] IN ({orders_string})
+                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                ,[SOURCE] ,[ORDER_NAME] """
     pass # Query that returns dataframe with requested orders, silos and dates for relevant orders.
-    # Return None if no orders relevant.
+    # Return empty dataframe if no orders relevant.
 
 
 def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
@@ -212,36 +233,29 @@ def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
             return df_total
 
 
+def get_rework_total(df_silos):
+    if len(df_silos) == 0:
+        return None
+    else:
+        df_rework = pd.DataFrame()
+        for i in df_silos.index:
+            startdato = df_silos['Startdato'][i]
+            slutdato = df_silos['Slutdato'][i]
+            silo = df_silos['Silo'][i]
+            ordrenummer = df_silos['Ordrenummer'][i]
+            # Functions to get each different type of rework
+            df_prøvesmagning = get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer)
+            df_pakkeri = get_rework_pakkeri(startdato, slutdato, silo, ordrenummer)
+            df_komprimatorrum = get_rework_komprimatorrum(startdato, slutdato, silo, ordrenummer)
+            df_henstandsprøver = get_rework_henstandsprøver(startdato, slutdato, silo, ordrenummer)
+            # Concat each function to one dataframe
+            df_rework = pd.concat([df_rework, df_prøvesmagning, df_pakkeri, df_komprimatorrum, df_henstandsprøver])
+    return df_rework[['Ordrenummer','Silo','Indhold','Kilde']]
 
 
 
 
-
-
-if len(df_temp_silos) > 0:
-    for i in df_temp_silos.index:
-        startdato = df_temp_silos['Startdato'][i]
-        slutdato = df_temp_silos['Slutdato'][i]
-        silo = df_temp_silos['Silo'][i]
-        ordrenummer = df_temp_silos['Ordrenummer'][i]
-        # print(df_temp_silos['Startdato'][i], i)
-        
-        print(get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer))
-        print('*' *50)
-        print(get_rework_pakkeri(startdato, slutdato, silo, ordrenummer))
-        print('*' *50)
-        print(get_rework_komprimatorrum(startdato, slutdato, silo, ordrenummer))
-        print('*' *50)
-        print(get_rework_henstandsprøver(startdato, slutdato, silo, ordrenummer))
-
-    
-        
-    
-#    Kør hver funktion og gem dem i en samlet dataframe
-
-
-
-
+print(get_rework_total(df_temp_silos))
 
 
 

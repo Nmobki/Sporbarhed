@@ -151,8 +151,23 @@ def get_rework_pakkeri(start_date, end_date, silo, order_no):
             df_total['Kilde'] = 'Pakkeri'
             return df_total
                 
-
-                
+def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
+    if None in (start_date, end_date, silo, order_no):
+        return None
+    else:
+        query_ds = f""" SELECT [Referencenummer] AS [Indhold]
+                   FROM [BKI_Datastore].[cof].[Rework_tilgang]
+                   WHERE Kilde = 2 AND [Silo] = '{silo}'
+                   AND DATEADD(D, DATEDIFF(D, 0, [Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
+                   GROUP BY [Referencenummer] """
+        df_ds = pd.read_sql(query_ds, con_04)
+        if len(df_ds) == 0:
+            return None
+        else:
+            df_ds['Silo'] = silo
+            df_ds['Ordrenummer'] = order_no
+            df_ds['Kilde'] = 'Komprimatorrum'
+            return df_ds
         
 
 
@@ -172,9 +187,11 @@ if len(df_temp_silos) > 0:
         ordrenummer = df_temp_silos['Ordrenummer'][i]
         # print(df_temp_silos['Startdato'][i], i)
         
-        # print(get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer))
-
+        print(get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer))
+        print('*' *50)
         print(get_rework_pakkeri(startdato, slutdato, silo, ordrenummer))
+        print('*' *50)
+        print(get_rework_komprimatorrum(startdato, slutdato, silo, ordrenummer))
 
     
         

@@ -170,7 +170,46 @@ def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
             return df_ds
         
 
-
+def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
+    if None in (start_date, end_date, silo, order_no):
+        return None
+    else:
+        query_ds = f""" SELECT [Startdato] AS [Dato]
+                   ,[Silo],[Reworktype]
+                   FROM [BKI_Datastore].[cof].[Rework_tilgang]
+                   WHERE Kilde = 3 AND [Silo] = '{silo}'
+                   AND DATEADD(D, DATEDIFF(D, 0, [Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
+                   GROUP BY [Startdato],[Silo],[Reworktype] """
+        df_ds = pd.read_sql(query_ds, con_04)
+        df_total = pd.DataFrame()
+        if len(df_ds) == 0:
+            return None
+        else:
+            for i in df_ds.index:
+                dato = df_ds['Dato'][i].strftime('%Y-%m-%d')
+                rework_type = df_ds['Reworktype'][i]
+                query_nav = f""" WITH NAV_CTE AS ( SELECT ILE.[Posting Date] AS [Dato]
+                        	,ILE.[Document No_] AS [Indhold]
+                        	,CASE WHEN I.[Produktionskode] LIKE '%HB' THEN 2
+                            	ELSE 1 END AS [Kaffetype]
+                            FROM [dbo].[BKI foods a_s$Item Ledger Entry] AS ILE
+                            INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                            	ON ILE.[Item No_] = I.[No_]
+                            WHERE ILE.[Entry Type] = 6
+                            	AND I.[Item Category Code] = 'FÆR KAFFE'
+                            GROUP BY ILE.[Posting Date] ,ILE.[Item No_],ILE.[Document No_]
+                            	,CASE WHEN I.[Produktionskode] LIKE '%HB' THEN 2
+                            	ELSE 1 END )
+                            SELECT * FROM NAV_CTE WHERE [Dato] = '{dato}' AND [Kaffetype] = {rework_type} """
+                df_nav = pd.read_sql(query_nav, con_nav)
+                df_total = pd.concat([df_total, df_nav])
+        if len(df_total) == 0:
+            return None
+        else:
+            df_total['Silo'] = silo
+            df_total['Ordrenummer'] = order_no
+            df_total['Kilde'] = 'Henstandsprøver'
+            return df_total
 
 
 
@@ -192,6 +231,8 @@ if len(df_temp_silos) > 0:
         print(get_rework_pakkeri(startdato, slutdato, silo, ordrenummer))
         print('*' *50)
         print(get_rework_komprimatorrum(startdato, slutdato, silo, ordrenummer))
+        print('*' *50)
+        print(get_rework_henstandsprøver(startdato, slutdato, silo, ordrenummer))
 
     
         

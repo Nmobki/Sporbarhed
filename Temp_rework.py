@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import pyodbc
 import urllib
+import Sporbarhed_shared_functions as ssf
 
 # =============================================================================
 # Variables for query connections
@@ -42,41 +43,6 @@ dict_temp_silos = {
 df_temp_silos = pd.DataFrame.from_dict(dict_temp_silos)
 
 print(df_temp_silos)
-
-# =============================================================================
-# Queries already existing in main script
-# =============================================================================
-# Query for getting item numbers for production and assembly orders from Navision
-query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
-                       ,PAH.[Item No_] AS [Varenummer]
-                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PAH.[Item No_] = I.[No_]
-                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
-                           AND I.[Display Item] = 1
-                       UNION ALL
-                       SELECT PO.[No_],PO.[Source No_]
-                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PO.[Source No_] = I.[No_]
-                       WHERE PO.[Status] IN (2,3,4)
-                           AND I.[Item Category Code] <> 'RÅKAFFE' """
-df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
-
-# =============================================================================
-# Functions from main script
-# =============================================================================
-# Get info from assembly and production orders in Navision
-# Function exists already in main script
-def get_nav_order_info(order_no):
-    if order_no in df_nav_order_info['Ordrenummer'].tolist(): 
-        df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
-        return df_temp['Varenummer'].iloc[0]
-    else:
-        return None
-
-
-#**********************************************************************************************************************************************************
 
 
 # =============================================================================

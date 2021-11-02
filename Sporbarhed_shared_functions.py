@@ -197,6 +197,15 @@ def add_section_to_word(document, dataframe, section, pagebreak, rows_to_bold):
     # Add page break
     if pagebreak:
         document.add_page_break()
+        
+def get_email_subject(request_reference, request_type):
+    dict_email_subject = {
+        0: f'Anmodet rapport for ordre {request_reference}'
+        ,1: f'Anmodet rapport for parti {request_reference}'
+        ,2: 'Anmodet rapport for opspræt'
+        ,3: f'Anmodet rapport for handelsvare {request_reference}'
+    }
+    return str(dict_email_subject[request_type])
 
 
 

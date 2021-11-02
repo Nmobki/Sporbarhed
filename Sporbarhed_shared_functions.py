@@ -2,14 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import urllib
-from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine
 import pyodbc
-import docx
-from docx.shared import Inches
-import openpyxl
-import networkx as nx
+
 
 # =============================================================================
 # Variables for query connections

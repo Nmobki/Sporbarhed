@@ -3,3 +3,4 @@
 __pycache__/Sporbarhed_færdigkaffe.cpython-37.pyc
 .pylint.d/Sporbarhed_råkaffe1.stats
 Tests.py
+*.pyc

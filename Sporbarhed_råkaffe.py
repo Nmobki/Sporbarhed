@@ -879,7 +879,7 @@ def initiate_report(initiate_id):
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             # Write results to Word and Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
+            # ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log

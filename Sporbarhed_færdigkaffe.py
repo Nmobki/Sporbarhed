@@ -8,7 +8,6 @@ from sqlalchemy import create_engine
 import pyodbc
 import docx
 from docx.shared import Inches
-
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
 

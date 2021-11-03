@@ -280,7 +280,10 @@ def initiate_report(initiate_id):
                          WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
     
-    production_date = df_nav_generelt['Produktionsdato'].iloc[0]
+    if len(df_nav_generelt) == 0:
+        production_date = ''
+    else:
+        production_date = df_nav_generelt['Produktionsdato'].iloc[0]
     
     # Control of scales in packing area, 3 days back and 1 day ahead of production date
     query_ds_vægtkontrol = f""" SELECT V.[Registreringstidspunkt]
@@ -870,7 +873,6 @@ def initiate_report(initiate_id):
                         'Enheder','Kilo']
     columns_1_dec = ['Enheder','Kilo']
     columns_strip = ['Produktionsordrenummer']
-    
     if ssf.get_section_status_code(df_nav_debitorer) == 99:
         try:
             # Concat Order nos to one string
@@ -904,7 +906,7 @@ def initiate_report(initiate_id):
         except Exception as e: # Insert error into log
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_total))
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_debitorer))
     
     # =============================================================================
     # Section 8: Massebalance

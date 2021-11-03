@@ -6,6 +6,7 @@ import pandas as pd
 import pyodbc
 import Sporbarhed_råkaffe
 import Sporbarhed_færdigkaffe
+import Sporbarhed_opspræt
 
 
 # =============================================================================
@@ -43,7 +44,7 @@ if req_type == 0:
 elif req_type == 1:
     Sporbarhed_råkaffe.initiate_report(req_id)
 elif req_type == 2:
-    pass
+    Sporbarhed_opspræt.initiate_report(req_id)
 
 
 # Exit script

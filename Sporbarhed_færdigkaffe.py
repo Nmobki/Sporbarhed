@@ -907,7 +907,37 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_debitorer))
+
+    # =============================================================================
+    # Section 9: Rework anvendt    
+    # =============================================================================
+    section_id = 9
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Varenummer','Varenavn','Produktionsordre','Silo',
+                    'Indhold','Indhold varenummer','Indhold varenavn','Kilde']
+    columns_strip = ['Kilde']
+    df_rework = ssf.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
     
+    if ssf.get_section_status_code(df_rework) == 99:
+        try:
+            # Get additional columns through functions
+            df_rework['Varenummer'] = df_rework['Produktionsordre'].apply((lambda x: ssf.get_nav_order_info(x)))
+            df_rework['Varenavn'] = df_rework['Varenummer'].apply((lambda x: ssf.get_nav_item_info(x, 'Beskrivelse')))
+            df_rework['Kilde varenummer'] = df_rework['Produktionsordre'].apply((lambda x: ssf.get_nav_order_info(x)))
+            df_rework['Kilde varenavn'] = df_rework['Varenummer'].apply((lambda x: ssf.get_nav_item_info(x, 'Beskrivelse')))
+            # Concat kilde to one string if multiple and remove any trailing or leading commas
+            df_rework = df_rework.groupby(['Varenummer','Varenavn','Produktionsordre','Indhold','Indhold varenummer','Indhold varenavn','Silo']).agg(
+                {'Kilde': lambda x: ','.join(sorted(pd.Series.unique(x)))}).reset_index()
+            for col in columns_strip:
+                df_rework[col] = df_rework[col].apply(lambda x: ssf.strip_comma_from_string(x))
+            # Write results to Word and Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
+            # ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework))   
+
     # =============================================================================
     # Section 8: Massebalance
     # =============================================================================

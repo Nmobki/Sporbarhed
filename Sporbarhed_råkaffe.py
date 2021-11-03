@@ -124,7 +124,7 @@ def initiate_report(initiate_id):
                            WHERE SL.[Forespørgsels_id] = {req_id} """
     
     # =============================================================================
-    # For complete script below here
+    # SQL queries for each section
     # =============================================================================
     
     # General info from Navision

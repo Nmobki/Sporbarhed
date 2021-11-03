@@ -220,6 +220,18 @@ class rework():
         else:
             df['Dato'].strftime('%Y-%m-%d')
             return str(df['Dato'].iloc[0])
+
+    def get_silo_next_empty(silo, date):
+        query = f""" SELECT	MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
+                     FROM [dbo].[PRO_EXP_SILO_DIF]
+                     WHERE [SILO] = '{silo}'
+                     DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) > '{date}' """
+        df = pd.read_sql(query, con_probat)
+        if len(df) == 0:
+            return None
+        else:
+            df['Dato'].strftime('%Y-%m-%d')
+            return str(df['Dato'].iloc[0])
     
     def get_rework_silos(orders_string):
         query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Slutdato]

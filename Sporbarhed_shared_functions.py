@@ -223,7 +223,7 @@ class rework():
     
     def get_rework_silos(orders_string):
         query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Slutdato]
-                    ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
+                    ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Produktionsordre]
                     FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                     WHERE [SOURCE_NAME] IN ('511','512') AND [ORDER_NAME] IN ({orders_string})
                     GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) ,[SOURCE_NAME] ,[ORDER_NAME]
@@ -236,7 +236,7 @@ class rework():
                     ,[SOURCE] ,[ORDER_NAME] """
         df = pd.read_sql(query, con_probat)
         if len(df) == 0:
-            return None
+            return df[['Startdato','Slutdato','Silo','Produktionsordre']]
         else:      
             df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
             return df
@@ -258,7 +258,7 @@ class rework():
                 return None
             else:
                 df_temp['Silo'] = silo
-                df_temp['Ordrenummer'] = order_no
+                df_temp['Produktionsordre'] = order_no
                 df_temp['Kilde'] = 'Prøvesmagning'
                 return df_temp
     
@@ -301,7 +301,7 @@ class rework():
                 return None
             else:
                 df_total['Silo'] = silo
-                df_total['Ordrenummer'] = order_no
+                df_total['Produktionsordre'] = order_no
                 df_total['Kilde'] = 'Pakkeri'
                 return df_total
     
@@ -319,7 +319,7 @@ class rework():
                 return None
             else:
                 df_ds['Silo'] = silo
-                df_ds['Ordrenummer'] = order_no
+                df_ds['Produktionsordre'] = order_no
                 df_ds['Kilde'] = 'Komprimatorrum'
                 return df_ds
     
@@ -360,7 +360,7 @@ class rework():
                 return None
             else:
                 df_total['Silo'] = silo
-                df_total['Ordrenummer'] = order_no
+                df_total['Produktionsordre'] = order_no
                 df_total['Kilde'] = 'Henstandsprøver'
                 return df_total
     
@@ -373,7 +373,7 @@ class rework():
                 startdato = df_silos['Startdato'][i]
                 slutdato = df_silos['Slutdato'][i]
                 silo = df_silos['Silo'][i]
-                ordrenummer = df_silos['Ordrenummer'][i]
+                ordrenummer = df_silos['Produktionsordre'][i]
                 # Functions to get each different type of rework
                 df_prøvesmagning = rework.get_rework_prøvesmagning(startdato, slutdato, silo, ordrenummer)
                 df_pakkeri = rework.get_rework_pakkeri(startdato, slutdato, silo, ordrenummer)
@@ -381,6 +381,6 @@ class rework():
                 df_henstandsprøver = rework.get_rework_henstandsprøver(startdato, slutdato, silo, ordrenummer)
                 # Concat each function to one dataframe
                 df_rework = pd.concat([df_rework, df_prøvesmagning, df_pakkeri, df_komprimatorrum, df_henstandsprøver])
-        return df_rework[['Ordrenummer','Silo','Indhold','Kilde']]
+        return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
     
     

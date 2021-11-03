@@ -49,16 +49,19 @@ print(df_temp_silos)
 # New functions - to be implemented in main script
 # =============================================================================
 def get_silo_last_empty(silo, date):
-    query = f""" """
+    query = f""" SELECT	MAX(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
+                 FROM [dbo].[PRO_EXP_SILO_DIF]
+                 WHERE [SILO] = '{silo}'
+                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) < '{date}' """
     df = pd.read_sql(query, con_probat)
-    
     if len(df) == 0:
         return None
     else:
-        return 'string' # Change this..
+        df['Dato'].strftime('%Y-%m-%d')
+        return str(df['Dato'].iloc[0])
 
 def get_rework_silos(orders_string):
-    query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+    query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Slutdato]
                 ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
                 FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                 WHERE [SOURCE_NAME] IN ('511','512') AND [ORDER_NAME] IN ({orders_string})
@@ -70,9 +73,12 @@ def get_rework_silos(orders_string):
                 WHERE [SOURCE] in ('401','403') AND [ORDER_NAME] IN ({orders_string})
                 GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                 ,[SOURCE] ,[ORDER_NAME] """
-    pass # Query that returns dataframe with requested orders, silos and dates for relevant orders.
-    # Return empty dataframe if no orders relevant.
-
+    df = pd.read_sql(query, con_probat)
+    if len(df) == 0:
+        return None
+    else:      
+        df['Startdato'] = df['Silo'].apply((lambda x: get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
+        return df
 
 def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
     if None in (start_date, end_date, silo, order_no):
@@ -137,7 +143,7 @@ def get_rework_pakkeri(start_date, end_date, silo, order_no):
             df_total['Ordrenummer'] = order_no
             df_total['Kilde'] = 'Pakkeri'
             return df_total
-                
+
 def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
     if None in (start_date, end_date, silo, order_no):
         return None
@@ -155,7 +161,6 @@ def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
             df_ds['Ordrenummer'] = order_no
             df_ds['Kilde'] = 'Komprimatorrum'
             return df_ds
-        
 
 def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
     if None in (start_date, end_date, silo, order_no):
@@ -197,7 +202,6 @@ def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
             df_total['Ordrenummer'] = order_no
             df_total['Kilde'] = 'Henstandsprøver'
             return df_total
-
 
 def get_rework_total(df_silos):
     if len(df_silos) == 0:

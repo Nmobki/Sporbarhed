@@ -4,7 +4,6 @@ import pandas as pd
 from sqlalchemy import create_engine
 import pyodbc
 import urllib
-import Sporbarhed_shared_functions as ssf
 
 # =============================================================================
 # Variables for query connections

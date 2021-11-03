@@ -205,7 +205,7 @@ def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
 
 def get_rework_total(df_silos):
     if len(df_silos) == 0:
-        return None
+        return pd.DataFrame()
     else:
         df_rework = pd.DataFrame()
         for i in df_silos.index:

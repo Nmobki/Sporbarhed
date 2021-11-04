@@ -247,11 +247,8 @@ class rework():
                     GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                     ,[SOURCE] ,[ORDER_NAME] """
         df = pd.read_sql(query, con_probat)
-        if len(df) == 0:
-            return df[['Startdato','Slutdato','Silo','Produktionsordre']]
-        else:      
-            df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
-            return df
+        df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
+        return df
     
     def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
         if None in (start_date, end_date, silo, order_no):

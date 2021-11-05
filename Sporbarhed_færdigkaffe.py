@@ -371,6 +371,16 @@ def initiate_report(initiate_id):
             orders_related.append(order)
     
     req_orders_total = ssf.string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
+    req_orders_related = ssf.string_to_sql(orders_related) # String used for querying Probat for relation between grinder and roaster for visualization
+    
+    # Get Probat relation between grinder and roaster for visualization
+    query_probat_lg_to_ulr = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
+                                  ,[S_ORDER_NAME] AS [Relateret ordre] ,'Probat' AS [Kilde]
+                                  FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                                  WHERE [S_ORDER_NAME] <> 'REWORK ROAST'
+                                	AND [ORDER_NAME] IN ({req_orders_related})
+                                  GROUP BY [ORDER_NAME],[S_ORDER_NAME] """
+    df_probat_lg_to_ulr = pd.read_sql(query_probat_lg_to_ulr, con_probat)
     
     # Recursive query to find all relevant produced orders related to the requested order
     # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
@@ -393,7 +403,7 @@ def initiate_report(initiate_id):
                                       AND ILE_O.[Entry Type] IN (6,9)
                                   INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
     								  ON ILE_O.[Item No_] = I.[No_]
-    								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
+								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
                                   SELECT [Lot No_] AS [Lot]
                                   FROM [LOT_ORG] GROUP BY [Lot No_] """
     df_nav_lotnos_total = pd.read_sql(query_nav_lotnos_total, con_nav)
@@ -468,7 +478,7 @@ def initiate_report(initiate_id):
     							  AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
     df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
-    
+
     # Lotnumber information for the originally requested order
     query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
                 	  ,LI.[Certificate Number] AS [Pallenummer]
@@ -645,13 +655,13 @@ def initiate_report(initiate_id):
                     'Relateret vare','Relateret navn','Kilde']
     
     if req_ordrelationstype == 0:
-        df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
+        df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related,df_probat_lg_to_ulr])
     elif req_ordrelationstype == 1:
-        df_temp_orders = pd.concat([df_nav_orders,df_probat_orders])
+        df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_probat_lg_to_ulr])
     elif req_ordrelationstype == 2:
         df_temp_orders = pd.concat([df_nav_orders,df_nav_order_related
                                     ,df_probat_orders.loc[df_probat_orders['Kilde'] == 'Probat mølle']]) # Only Probat orders which are not related to finished goods
-    
+    print(df_probat_orders)
     if ssf.get_section_status_code(df_temp_orders) == 99:
         try:
             df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: ssf.get_nav_order_info(x))
@@ -915,7 +925,7 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Produktionsordre','Silo',
                     'Indhold','Indhold varenummer','Indhold varenavn','Kilde']
     columns_strip = ['Kilde']
-    df_rework = ssf.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
+    df_rework = ssf.rework.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
     
     if ssf.get_section_status_code(df_rework) == 99:
         try:

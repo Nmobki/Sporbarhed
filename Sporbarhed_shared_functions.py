@@ -136,9 +136,9 @@ def number_format(value, number_type):
 
 # Prevent division by zero error
 def zero_division(nominator, denominator, zero_return):
-    dict = {'None':None,'Zero':0}
+    dictionary = {'None':None,'Zero':0}
     if denominator in [0,None]:
-        return dict[zero_return]
+        return dictionary[zero_return]
     else:
         return nominator / denominator
 
@@ -170,7 +170,7 @@ def get_nav_item_info(item_no, field):
 
 # Get info from assembly and production orders in Navision
 def get_nav_order_info(order_no):
-    if order_no in df_nav_order_info['Ordrenummer'].tolist(): 
+    if order_no in df_nav_order_info['Ordrenummer'].tolist():
         df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
         return df_temp['Varenummer'].iloc[0]
     else:
@@ -197,7 +197,8 @@ def add_section_to_word(document, dataframe, section, pagebreak, rows_to_bold):
     # Add page break
     if pagebreak:
         document.add_page_break()
-        
+
+# Get subject for emails depending on request type
 def get_email_subject(request_reference, request_type):
     dict_email_subject = {
         0: f'Anmodet rapport for ordre {request_reference}'
@@ -209,6 +210,7 @@ def get_email_subject(request_reference, request_type):
 
 
 class rework():
+    # Get last empty signal from a given silo before requested date
     def get_silo_last_empty(silo, date):
         query = f""" SELECT	MAX(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
@@ -220,7 +222,8 @@ class rework():
         else:
             df['Dato'].strftime('%Y-%m-%d')
             return str(df['Dato'].iloc[0])
-
+    
+    # Get the first empty signal from a given silo after the requested date
     def get_silo_next_empty(silo, date):
         query = f""" SELECT	MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
@@ -233,6 +236,7 @@ class rework():
             df['Dato'].strftime('%Y-%m-%d')
             return str(df['Dato'].iloc[0])
     
+    # Get a dataframe containing all orders which have used rework silos as well as use dates
     def get_rework_silos(orders_string):
         query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Slutdato]
                     ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Produktionsordre]
@@ -250,6 +254,7 @@ class rework():
         df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
         return df
     
+    # Get rework registrered in prøvesmagning in BKI_Datastore
     def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
         if None in (start_date, end_date, silo, order_no):
             return None
@@ -271,6 +276,7 @@ class rework():
                 df_temp['Kilde'] = 'Prøvesmagning'
                 return df_temp
     
+    # Fetch start dates from BKI_Datastore and use these to return a list of relevant orders from Navision containing order numbers.
     def get_rework_pakkeri(start_date, end_date, silo, order_no):
         if None in (start_date, end_date, silo, order_no):
             return None
@@ -314,6 +320,7 @@ class rework():
                 df_total['Kilde'] = 'Pakkeri'
                 return df_total
     
+    # Get order numbers registrered in komprimatorrum in BKI_Datastore
     def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
         if None in (start_date, end_date, silo, order_no):
             return None
@@ -332,6 +339,7 @@ class rework():
                 df_ds['Kilde'] = 'Komprimatorrum'
                 return df_ds
     
+    # Fetch start dates from BKI_Datastore and use these to return a list of relevant orders from Navision containing order numbers.
     def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
         if None in (start_date, end_date, silo, order_no):
             return None
@@ -372,7 +380,8 @@ class rework():
                 df_total['Produktionsordre'] = order_no
                 df_total['Kilde'] = 'Henstandsprøver'
                 return df_total
-    
+
+    # Use previously defined functions to create one total dataframe containing all rework identified through various sources
     def get_rework_total(df_silos):
         if len(df_silos) == 0:
             return pd.DataFrame()
@@ -391,5 +400,3 @@ class rework():
                 # Concat each function to one dataframe
                 df_rework = pd.concat([df_rework, df_prøvesmagning, df_pakkeri, df_komprimatorrum, df_henstandsprøver])
         return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
-    
-    

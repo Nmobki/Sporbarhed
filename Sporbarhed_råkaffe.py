@@ -24,15 +24,15 @@ def initiate_report(initiate_id):
     params_04 = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_04};DATABASE={db_04};Trusted_Connection=yes')
     engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={params_04}')
     cursor_04 = con_04.cursor()
-    
+
     server_nav = r'SQLSRV03\NAVISION'
     db_nav = 'NAV100-DRIFT'
     con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-    
+
     server_probat = '192.168.125.161'
     db_probat = 'BKI_IMP_EXP'
     con_probat = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_probat};DATABASE={db_probat};uid=bki_read;pwd=Probat2016')
-    
+
     # =============================================================================
     # Read data from request
     # =============================================================================
@@ -41,11 +41,11 @@ def initiate_report(initiate_id):
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
     df_request = pd.read_sql(query_ds_request, con_04)
-    
+
     # Exit script if no request data is found
     if len(df_request) == 0:
         raise SystemExit(0)
-    
+
     # =============================================================================
     # Set request variables
     # =============================================================================
@@ -56,13 +56,13 @@ def initiate_report(initiate_id):
     req_id = df_request.loc[0, 'Id']
     req_modtagelse = df_request.loc[0, 'Modtagelse']
     req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
-    
+
     script_name = 'Sporbarhed_samlet.py'
     timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
     orders_top_level = [req_reference_no]
     orders_related = []
     df_sections = ssf.get_ds_reporttype(req_id)
-    
+
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
@@ -71,13 +71,13 @@ def initiate_report(initiate_id):
                       WHERE [Id] = {req_id} """)
     cursor_04.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
-    
+
     # =============================================================================
     # Variables for files generated
     # =============================================================================
     filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
     file_name = f'Rapport_{req_reference_no}_{req_id}'
-    
+
     doc = docx.Document()
     doc.add_heading(f'Rapport for produktionsordre {req_reference_no}',0)
     doc.sections[0].header.paragraphs[0].text = f'{script_name}'
@@ -89,17 +89,17 @@ def initiate_report(initiate_id):
     doc.sections[0].left_margin = docx.shared.Mm(10)
     doc.sections[0].right_margin = docx.shared.Mm(10)
     doc.sections[0].orientation = docx.enum.section.WD_ORIENT.LANDSCAPE
-    
+
     doc_name = f'{file_name}.docx'
     path_file_doc = filepath + r'\\' + doc_name
-    
+
     wb_name = f'{file_name}.xlsx'
     path_file_wb = filepath + r'\\' + wb_name
     excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
-    
+
     png_relations_name = f'{file_name}.png'
     path_png_relations = filepath + r'\\' + png_relations_name
-    
+
     # =============================================================================
     # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
     # =============================================================================
@@ -109,8 +109,8 @@ def initiate_report(initiate_id):
     					   ON SRS.[Sektion] = SS.[Id]
                            WHERE [Forespørgselstype] = {req_type} """
     df_sections = pd.read_sql(query_ds_reporttypes, con_04)
-    
-    
+
+
     # Query section log for each section logged per script-run.
     # Query is only executed at the end of each class
     query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
@@ -122,11 +122,11 @@ def initiate_report(initiate_id):
                            INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
                                 ON SL.[Statuskode] = SS.[Id]
                            WHERE SL.[Forespørgsels_id] = {req_id} """
-    
+
     # =============================================================================
     # SQL queries for each section
     # =============================================================================
-    
+
     # General info from Navision
     query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
                     	,V.[Name] AS [Leverandørnavn] ,PL.[No_] AS [Varenummer]
@@ -139,7 +139,7 @@ def initiate_report(initiate_id):
                         WHERE PL.[Type] = 2
                             AND PL.[Document No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
-    
+
     # Get timestamp for last export of inventory from Probat
     query_probat_inventory_timestamp = """ WITH [Tables] AS (
                                        SELECT MAX([RECORDING_DATE]) AS [Date]
@@ -150,7 +150,7 @@ def initiate_report(initiate_id):
                                         SELECT MIN([Date]) AS [Silobeholdning eksporteret]
                                         FROM [Tables] """
     df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
-    
+
     # Information from Probat for the receiving of coffee
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
                              BEGIN
@@ -182,7 +182,7 @@ def initiate_report(initiate_id):
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
-    
+
     # Information from Probat for the processing of coffee
     query_probat_processing = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
                               BEGIN
@@ -219,7 +219,7 @@ def initiate_report(initiate_id):
                               GROUP BY [Placering]
                               END """
     df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
-    
+
     # Get order numbers the requested coffee has been used in
     query_probat_used_in_roast = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
                                BEGIN
@@ -241,7 +241,7 @@ def initiate_report(initiate_id):
     roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
     sql_roast_orders = ssf.string_to_sql(roast_orders)
     # Green coffee used for roasting
-    
+
     query_probat_roast_input = f""" IF 'None' = 'None'
                                 BEGIN
                                 SELECT [CUSTOMER_CODE] AS [Varenummer]
@@ -276,7 +276,7 @@ def initiate_report(initiate_id):
     else:
         df_probat_roast_input = pd.DataFrame()
     # Output from roasters
-    
+
     query_probat_roast_output = f""" SELECT
                                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                                 ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
@@ -290,7 +290,7 @@ def initiate_report(initiate_id):
         df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
     else:
         df_probat_roast_output = pd.DataFrame()
-    
+
     # Read grinding orders form Probat
     query_probat_grinding_input = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
                             	  ,[CUSTOMER_CODE] AS [Varenummer]
@@ -306,11 +306,11 @@ def initiate_report(initiate_id):
         df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
     else:
         df_probat_grinding_input = pd.DataFrame()
-    
+
     # Convert orders to string for use in grinder output query
     grinder_orders = df_probat_grinding_input['Ordrenummer'].unique().tolist()
     sql_grinder_orders = ssf.string_to_sql(grinder_orders)
-    
+
     # Get output from grinders
     query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
                                    ,SUM([WEIGHT] / 1000.0) AS [Kilo]
@@ -323,7 +323,7 @@ def initiate_report(initiate_id):
         df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
     else:
         df_probat_grinding_output = pd.DataFrame()
-    
+
     # Get order relations from Probat for finished goods if possible
     query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
                           BEGIN
@@ -392,7 +392,7 @@ def initiate_report(initiate_id):
                           END """
     df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
     df_probat_orders_top = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
-    
+
     # Join previous found orders to one list for query below
     sql_related_orders = ssf.string_to_sql(roast_orders + grinder_orders)
     # Get related orders from Navision
@@ -404,14 +404,14 @@ def initiate_report(initiate_id):
                                ({sql_related_orders})
                                AND [Invalid] = 0 """
     df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
-    
+
     # Get list of orders and append to lists if they do not already exist
     # Merge Probat and NAV orders before merging
     nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
     nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
     probat_orders_top = df_probat_orders_top['Ordrenummer'].unique().tolist()
     probat_orders_related = df_probat_orders_top['Relateret ordre'].unique().tolist()
-    
+
     # Create strings dependent on request relationsship type, defined when report is requested by user
     if req_ordrelationstype == 0: # All
         temp_orders_top = probat_orders_top + nav_orders_top
@@ -422,23 +422,23 @@ def initiate_report(initiate_id):
     elif req_ordrelationstype == 2: # Just Navision
         temp_orders_top = nav_orders_top
         temp_orders_related = nav_orders_related
-    
+
     # If order doesn't exist in list, append:
     for order in temp_orders_top:
         if order not in  orders_top_level:
             orders_top_level.append(order)
-    
+
     for order in temp_orders_related:
         if order not in orders_related:
             orders_related.append(order)
     # String used for querying Navision, only finished goods
     req_orders_total = ssf.string_to_sql(orders_top_level)
-    
+
     # Recursive query to find all relevant produced orders related to the requested order
     # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
     # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
     # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-    
+
     #First we find all relevant lot nos and store in string to be used in queries below
     query_nav_lotnos_total = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
@@ -460,7 +460,7 @@ def initiate_report(initiate_id):
                                   FROM [LOT_ORG] GROUP BY [Lot No_] """
     df_nav_lotnos_total = pd.read_sql(query_nav_lotnos_total, con_nav)
     nav_lotnots_total_sql_string = ssf.string_to_sql(df_nav_lotnos_total['Lot'].unique().tolist())
-    
+
     # Find finished goods
     query_nav_færdigvaretilgang = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
@@ -485,7 +485,7 @@ def initiate_report(initiate_id):
     							WHERE ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                                 GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
     df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
-    
+
     # Recursive query to get all customer who purchased identified lotnumbers.
     # See explanation of query above
     query_nav_debitorer = f"""   WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
@@ -509,7 +509,7 @@ def initiate_report(initiate_id):
     						AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                           GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer]  """
     df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
-    
+
     # Query to show relation between requested order and any orders which have used it as components
     query_nav_orders = f"""  WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
@@ -531,7 +531,7 @@ def initiate_report(initiate_id):
     							  AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
     df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
-    
+
     # Query to get karakterer saved in BKI_Datastore
     query_ds_karakterer = f""" IF 'None' = 'None'
                           BEGIN
@@ -565,7 +565,7 @@ def initiate_report(initiate_id):
                         	AND RRP.[Delivery] = '{req_modtagelse}'
                           END """
     df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_04)
-    
+
     query_probat_gc_samples = f""" IF 'None' = 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
@@ -586,7 +586,7 @@ def initiate_report(initiate_id):
                                 AND [DELIVERY_NAME] = '{req_modtagelse}'
                             END """
     df_probat_gc_samples = pd.read_sql(query_probat_gc_samples, con_probat)
-    
+
     # =============================================================================
     # Section 1: Generelt
     # =============================================================================
@@ -594,7 +594,7 @@ def initiate_report(initiate_id):
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Kontraktnummer','Modtagelse','Varenummer','Varenavn','Mærkningsordning','Leverandørnummer'
                     ,'Leverandørnavn','Silobeholdning eksporteret']
-    
+
     if ssf.get_section_status_code(df_nav_generelt) == 99:
         try:
             df_nav_generelt['Kontraktnummer'] = req_reference_no
@@ -615,7 +615,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_generelt))
-    
+
     # =============================================================================
     # Section 21: Modtagelse
     # =============================================================================
@@ -623,7 +623,7 @@ def initiate_report(initiate_id):
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Placering','Dato','Kilo','Restlager']
     columns_1_dec = ['Kilo','Restlager']
-    
+
     if ssf.get_section_status_code(df_probat_receiving) == 99:
         try:
             # Create total for dataframe
@@ -646,7 +646,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_receiving))
-    
+
     # =============================================================================
     # Section 20: Rensning
     # =============================================================================
@@ -655,7 +655,7 @@ def initiate_report(initiate_id):
     column_order = ['Silo','Dato','Kilo','Restlager']
     columns_1_dec = ['Kilo','Restlager']
     columns_strip = ['Dato']
-    
+
     if ssf.get_section_status_code(df_probat_processing) == 99:
         try:
             # Apply column formating for date column before concat
@@ -688,7 +688,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_processing))
-    
+
     # =============================================================================
     # Section 5: Risteordrer
     # =============================================================================
@@ -698,7 +698,7 @@ def initiate_report(initiate_id):
                     'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
     columns_1_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
     columns_strip = ['Dato','Silo']
-    
+
     if ssf.get_section_status_code(df_probat_roast_output) == 99:
         try:
             # Apply column formating for date column before concat
@@ -726,7 +726,7 @@ def initiate_report(initiate_id):
                                      'Heraf kontrakt': df_probat_roast_total['Heraf kontrakt'].sum(),
                                      'Kilo ristet': df_probat_roast_total['Kilo ristet'].sum()
                                      }
-    
+
             # Create temp dataframe including total
             df_temp_total = pd.concat([df_probat_roast_total,
                                    pd.DataFrame([dict_risteordrer_total])])
@@ -743,7 +743,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_roast_output))
-    
+
     # =============================================================================
     # Section 4: Mølleordrer
     # =============================================================================
@@ -752,7 +752,7 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Ordrenummer','Dato','Silo','Kilo']
     columns_1_dec = ['Kilo']
     columns_strip = ['Dato','Silo']
-    
+
     if ssf.get_section_status_code(df_probat_grinding_input) == 99:
         try:
             # Apply column formating for date column before concat
@@ -779,7 +779,7 @@ def initiate_report(initiate_id):
             df_probat_grinding_total['Varenavn'] = df_probat_grinding_total['Varenummer'].apply(ssf.get_nav_item_info, field='Beskrivelse')
             # Create total for dataframe
             dict_mølleordrer_total = {'Kilo': df_probat_grinding_total['Kilo'].sum()}
-    
+
             # Create temp dataframe including total
             df_temp_total = pd.concat([df_probat_grinding_total,
                                    pd.DataFrame([dict_mølleordrer_total])])
@@ -796,7 +796,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_roast_output))
-    
+
     # =============================================================================
     # Section 3: Færdigvaretilgang
     # =============================================================================
@@ -805,7 +805,7 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
     columns_strip = ['Ordrenummer']
-    
+
     if ssf.get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
             # Concat order numbers to one string
@@ -840,8 +840,8 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_total))
-    
-    
+
+
     # =============================================================================
     # Section 7: Debitorer
     # =============================================================================
@@ -851,7 +851,7 @@ def initiate_report(initiate_id):
                     'Enheder','Kilo']
     columns_1_dec = ['Enheder','Kilo']
     columns_strip = ['Produktionsordrenummer']
-    
+
     if ssf.get_section_status_code(df_nav_debitorer) == 99:
         try:
             # Concat Order nos to one string
@@ -886,7 +886,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_total))
-    
+
     # =============================================================================
     # Section 8: Massebalance
     # =============================================================================
@@ -896,7 +896,7 @@ def initiate_report(initiate_id):
                      '[7] Difference','[9] Ristet kaffe','[10] Difference','[12] Færdigvareproduktion',
                      '[13] Difference','[15] Salg','[16] Regulering & ompak','[17] Restlager','[18] Difference']
     columns_2_pct = ['[5] Difference pct','[8] Difference pct','[11] Difference pct','[14] Difference pct','[19] Difference pct']
-    
+
     dict_massebalance = {'[1] Kontrakt': df_probat_receiving['Kilo'].sum(),
                          '[2] Renset': df_probat_processing['Kilo'].sum(),
                          '[3] Restlager': df_probat_processing['Restlager'].sum(),
@@ -938,14 +938,14 @@ def initiate_report(initiate_id):
         dict_massebalance[col] = ssf.number_format(dict_massebalance[col] ,'dec_1')
     for col in columns_2_pct:
         dict_massebalance[col] = ssf.number_format(dict_massebalance[col] ,'pct_2')
-    
+
     df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
     df_massebalance.columns = ['Sektion','Værdi']
     df_massebalance['Note'] = [None,None,None,'[1]-[2]-[3]','[4]/[1]',None,'[2]-[3]-[6]','[7]/([2]-[3])',None,
                                '[2]-[3]-[9]','[10]/([2]-[3])',None,'[9]-[12]','[13]/[12]',None,None,None,
                                '[12]-[15]-[16]-[17]','[18]/[12]']
     df_massebalance['Bemærkning'] = None
-    
+
     if ssf.get_section_status_code(df_massebalance) == 99:
         try:
             # Write results to Word and Excel
@@ -957,7 +957,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_massebalance))
-       
+      
     # =============================================================================
     # Section 2: Relaterede ordrer Kontrakt --> færdigvare
     # =============================================================================
@@ -965,7 +965,7 @@ def initiate_report(initiate_id):
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
                     'Relateret vare','Relateret navn','Kilde']
-    
+
     if req_ordrelationstype == 0:
         df_temp_orders = pd.concat([df_nav_orders,df_probat_orders,df_nav_order_related])
     elif req_ordrelationstype == 1:
@@ -973,7 +973,7 @@ def initiate_report(initiate_id):
     elif req_ordrelationstype == 2:
         df_temp_orders = pd.concat([df_nav_orders,df_nav_order_related
                                     ,df_probat_orders.loc[df_probat_orders['Kilde'] == 'Probat mølle']]) # Only Probat orders which are not related to finished goods
-    
+
     if ssf.get_section_status_code(df_temp_orders) == 99:
         try:
             df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: ssf.get_nav_order_info(x))
@@ -1021,7 +1021,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_orders))
-    
+
     # =============================================================================
     # Section 12: Karakterer
     # =============================================================================
@@ -1029,7 +1029,7 @@ def initiate_report(initiate_id):
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Id','Risteri id','Person','Registreringstidspunkt','Syre','Krop','Aroma','Eftersmag','Robusta','Status','Bemærkning']
     columns_1_dec = ['Syre','Krop','Aroma','Eftersmag','Robusta']
-    
+
     if ssf.get_section_status_code(df_ds_karakterer) == 99:
         try:
             # String format datecolumn for export and numeric formating
@@ -1046,7 +1046,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_ds_karakterer))
-    
+
     # =============================================================================
     # Section 22: Probat samples
     # =============================================================================
@@ -1055,7 +1055,7 @@ def initiate_report(initiate_id):
     column_order = ['Dato','Probat id','Volumen,Vandprocent 1','Vandprocent 2','Vandprocent 3'
                     ,'Bruger','Bemærkning']
     columns_2_pct = ['Vandprocent 1','Vandprocent 2','Vandprocent 3']
-    
+
     if ssf.get_section_status_code(df_probat_gc_samples) == 99:
         try:
             # String format datecolumn for export
@@ -1072,14 +1072,14 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_gc_samples))
-    
+
     # =============================================================================
     # Section 18: Sektionslog
     # =============================================================================
     section_id = 18
     df_section_log = pd.read_sql(query_ds_section_log, con_04)
     section_name = ssf.get_section_name(section_id, df_sections)
-    
+
     if ssf.get_section_status_code(df_section_log) == 99:
         try:
             df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
@@ -1093,14 +1093,14 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_section_log))
-    
+
     #Save files
     excel_writer.save()
     ssf.log_insert(script_name, f'Excel file {file_name} created')
-    
+
     doc.save(path_file_doc)
     ssf.log_insert(script_name, f'Word document {file_name} created')
-    
+
     # =============================================================================
     # Write into email log
     # =============================================================================
@@ -1112,7 +1112,7 @@ def initiate_report(initiate_id):
                       ,'Note':req_note}
     pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
-    
+
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
@@ -1121,6 +1121,6 @@ def initiate_report(initiate_id):
                       WHERE [Id] = {req_id}""")
     cursor_04.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
-    
+
     # Exit script
     raise SystemExit(0)

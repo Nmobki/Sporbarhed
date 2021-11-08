@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import urllib
 from datetime import datetime
 import pandas as pd
-from sqlalchemy import create_engine
-import pyodbc
 import docx
 from docx.shared import Inches
 import networkx as nx
@@ -17,24 +14,12 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Variables for query connections
     # =============================================================================
-    server_04 = 'sqlsrv04'
-    db_04 = 'BKI_Datastore'
-    con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_04};DATABASE={db_04};autocommit=True')
-    params_04 = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_04};DATABASE={db_04};Trusted_Connection=yes')
-    engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={params_04}')
-    cursor_04 = con_04.cursor()
-
-    server_nav = r'SQLSRV03\NAVISION'
-    db_nav = 'NAV100-DRIFT'
-    con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-
-    server_comscale = r'comscale-bki\sqlexpress'
-    db_comscale = 'ComScaleDB'
-    con_comscale = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_comscale};DATABASE={db_comscale}')
-
-    server_probat = '192.168.125.161'
-    db_probat = 'BKI_IMP_EXP'
-    con_probat = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_probat};DATABASE={db_probat};uid=bki_read;pwd=Probat2016')
+    con_ds = ssf.get_connection('bki_datastore')
+    cursor_ds = ssf.get_cursor('bki_datastore')
+    engine_ds = ssf.get_engine('bki_datastore')
+    con_nav = ssf.get_connection('navision')
+    con_probat = ssf.get_connection('probat')
+    con_comscale = ssf.get_connection('comscale')
 
     # =============================================================================
     # Read data from request
@@ -43,7 +28,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_04)
+    df_request = pd.read_sql(query_ds_request, con_ds)
 
     # Exit script if no request data is found
     if len(df_request) == 0:
@@ -67,16 +52,16 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_04.commit()
+    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
+    filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
 
     doc = docx.Document()
@@ -109,7 +94,7 @@ def initiate_report(initiate_id):
     					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
     					   ON SRS.[Sektion] = SS.[Id]
                            WHERE [Forespørgselstype] = {req_type} """
-    df_sections = pd.read_sql(query_ds_reporttypes, con_04)
+    df_sections = pd.read_sql(query_ds_reporttypes, con_ds)
 
     # Query section log for each section logged per script-run.
     # Query is only executed at the end of the script
@@ -152,7 +137,7 @@ def initiate_report(initiate_id):
                         LEFT JOIN [SK] 
                             ON SF.[Referencenummer] = SK.[Referencenummer]
                         WHERE SF.[Id] = {req_id} """
-    df_results_generelt = pd.read_sql(query_ds_generelt, con_04)
+    df_results_generelt = pd.read_sql(query_ds_generelt, con_ds)
 
     production_machine = df_results_generelt['Pakkelinje'].iloc[0]
 
@@ -184,7 +169,7 @@ def initiate_report(initiate_id):
                            ON KP.[Id] = SK.[Id_org]
                            AND SK.[Id_org_kildenummer] = 6
                        WHERE KP.[Ordrenummer] = '{req_reference_no}' """
-    df_prøver = pd.read_sql(query_ds_samples, con_04)
+    df_prøver = pd.read_sql(query_ds_samples, con_ds)
 
     # All grades given for the requested order. Coalesce is to ensure that query
     # returns no results if record exists but no grades have been given
@@ -196,7 +181,7 @@ def initiate_report(initiate_id):
                               AND [Referencenummer] = '{req_reference_no}'
                               AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
                                 [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
-    df_karakterer = pd.read_sql(query_ds_karakterer, con_04)
+    df_karakterer = pd.read_sql(query_ds_karakterer, con_ds)
 
     # If lotnumbers from requested order have been checked for leakage the information
     # from the check is returned with this query. Will often return no results
@@ -207,13 +192,13 @@ def initiate_report(initiate_id):
     				   ,CASE WHEN [Overført_email_log] = 1 THEN
     				   'Over grænseværdi' ELSE 'Ok' END AS [Resultat af kontrol]
                        FROM [cof].[Vac_slip] """
-    df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_04)
+    df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_ds)
 
     # Primary packaging material - valve for bag
     query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
                       FROM [cof].[Ventil_registrering]
                       WHERE [Ordrenummer] = '{req_reference_no}' """
-    df_ds_ventil = pd.read_sql(query_ds_ventil, con_04)
+    df_ds_ventil = pd.read_sql(query_ds_ventil, con_ds)
 
     # Order statistics from Comscale. Only for good bags (trade)
     query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
@@ -294,7 +279,7 @@ def initiate_report(initiate_id):
                            WHERE SP.[Pakkelinje] = '{production_machine}'
                            AND DATEADD(d, DATEDIFF(d, 0, V.[Registreringstidspunkt] ), 0) 
                            BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
-    df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_04)
+    df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_ds)
 
     # Get any related orders identified through Probat
     # Pakkelinjer is used to find either grinding or roasting orders used directly in packaging
@@ -1228,7 +1213,7 @@ def initiate_report(initiate_id):
     # Section 18: Sektionslog
     # =============================================================================
     section_id = 18
-    df_section_log = pd.read_sql(query_ds_section_log, con_04)
+    df_section_log = pd.read_sql(query_ds_section_log, con_ds)
     section_name = ssf.get_section_name(section_id, df_sections)
 
     if ssf.get_section_status_code(df_section_log) == 99:
@@ -1262,16 +1247,16 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_04, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    cursor_04.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET Data_færdigbehandlet = 1
                       WHERE [Id] = {req_id}""")
-    cursor_04.commit()
+    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script

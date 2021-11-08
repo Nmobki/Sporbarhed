@@ -1,76 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import urllib
 import pandas as pd
-from sqlalchemy import create_engine
-import pyodbc
+import Sporbarhed_shared_server_information as sssi
 
 
 # =============================================================================
 # Variables for query connections
 # =============================================================================
-server_04 = 'sqlsrv04'
-db_04 = 'BKI_Datastore'
-con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_04};DATABASE={db_04};autocommit=True')
-params_04 = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_04};DATABASE={db_04};Trusted_Connection=yes')
-engine_04 = create_engine(f'mssql+pyodbc:///?odbc_connect={params_04}')
-cursor_04 = con_04.cursor()
-
-server_nav = r'SQLSRV03\NAVISION'
-db_nav = 'NAV100-DRIFT'
-con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-params_nav = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-engine_nav = create_engine(f'mssql+pyodbc:///?odbc_connect={params_nav}')
-
-server_comscale = r'comscale-bki\sqlexpress'
-db_comscale = 'ComScaleDB'
-con_comscale = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_comscale};DATABASE={db_comscale}')
-params_comscale = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_comscale};DATABASE={db_comscale};Trusted_Connection=yes')
-engine_comscale = create_engine(f'mssql+pyodbc:///?odbc_connect={params_comscale}')
-
-server_probat = '192.168.125.161'
-db_probat = 'BKI_IMP_EXP'
-con_probat = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_probat};DATABASE={db_probat};uid=bki_read;pwd=Probat2016')
-params_probat = urllib.parse.quote_plus(f'DRIVER=SQL Server Native Client 11.0;SERVER={server_probat};DATABASE={db_probat};Trusted_Connection=yes')
-engine_probat = create_engine(f'mssql+pyodbc:///?odbc_connect={params_probat}')
-
-# =============================================================================
-# Queries and dataframes for functions
-# =============================================================================
-
-# Query for Navision items, used for adding information to item numbers not queried directly from Navision
-query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
-                  ,[Item Category Code] AS [Varekategorikode]
-				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
-				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
-				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
-				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
-				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
-				  ELSE [Item Category Code] END AS [Varetype]
-                  FROM [dbo].[BKI foods a_s$Item] """
-df_nav_items = pd.read_sql(query_nav_items, con_nav)
-
-# Query for getting item numbers for production and assembly orders from Navision
-query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
-                       ,PAH.[Item No_] AS [Varenummer]
-                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PAH.[Item No_] = I.[No_]
-                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
-                           AND I.[Display Item] = 1
-                       UNION ALL
-                       SELECT PO.[No_],PO.[Source No_]
-                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
-                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
-                           ON PO.[Source No_] = I.[No_]
-                       WHERE PO.[Status] IN (2,3,4)
-                           AND I.[Item Category Code] <> 'RÅKAFFE' """
-df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+con_ds = sssi.con_ds
+engine_ds = sssi.engine_ds
+con_nav = sssi.con_nav
+con_comscale = sssi.con_comscale
+con_probat = sssi.con_probat
 
 # =============================================================================
 # Functions
 # =============================================================================
+
+# Get connection information from sssi
+def get_connection(connection):
+    dictionary = {
+        'navision': sssi.con_nav
+        ,'comscale': sssi.con_comscale
+        ,'probat': sssi.con_probat
+        ,'bki_datastore': sssi.con_ds }
+    return dictionary[connection]
+
+# Get cursor
+def get_cursor(connection):
+    dictionary = {
+        'bki_datastore': sssi.cursor_ds }
+    return dictionary[connection]
+
+# Get filepath
+def get_filepath(type):
+    dictionary = {
+        'report': sssi.report_filepath}
+    return dictionary[type]
+
+# Get engines for connections
+def get_engine(connection):
+    dictionary = {
+        'bki_datastore': sssi.engine_ds }
+    return dictionary[connection]
 
 # Read section names
 def get_ds_reporttype(request_type):
@@ -79,7 +52,7 @@ def get_ds_reporttype(request_type):
 					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
 					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Forespørgselstype] = {request_type} """
-    return pd.read_sql(query, con_04)
+    return pd.read_sql(query, con_ds)
 
 # Get section name for section from query
 def get_section_name(section, dataframe):
@@ -104,7 +77,7 @@ def section_log_insert(request_id, section, statuscode, errorcode=None):
                             'Statuskode':statuscode,
                             'Fejlkode_script':str(errorcode)}
                       , index=[0])
-    df.to_sql('Sporbarhed_sektion_log', con=engine_04, schema='trc', if_exists='append', index=False)
+    df.to_sql('Sporbarhed_sektion_log', con=engine_ds, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
 def insert_dataframe_into_excel (engine, dataframe, sheetname, include_index):
@@ -158,9 +131,21 @@ def strip_comma_from_string(text):
 def log_insert(event, note):
     dict_log = {'Note': note
                 ,'Event': event}
-    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_04, schema='dbo', if_exists='append', index=False)
+    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_ds, schema='dbo', if_exists='append', index=False)
 
 # Get info from item table in Navision
+# Query for Navision items, used for adding information to item numbers not queried directly from Navision
+query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
+                  ,[Item Category Code] AS [Varekategorikode]
+				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
+				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
+				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
+				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
+				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
+				  ELSE [Item Category Code] END AS [Varetype]
+                  FROM [dbo].[BKI foods a_s$Item] """
+df_nav_items = pd.read_sql(query_nav_items, con_nav)
+
 def get_nav_item_info(item_no, field):
     if item_no in df_nav_items['Nummer'].tolist():
         df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
@@ -168,7 +153,25 @@ def get_nav_item_info(item_no, field):
     else:
         return None
 
+
 # Get info from assembly and production orders in Navision
+# Query for getting item numbers for production and assembly orders from Navision
+query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
+                       ,PAH.[Item No_] AS [Varenummer]
+                       FROM [dbo].[BKI foods a_s$Posted Assembly Header] AS PAH
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PAH.[Item No_] = I.[No_]
+                       WHERE I.[Item Category Code] = 'FÆR KAFFE'
+                           AND I.[Display Item] = 1
+                       UNION ALL
+                       SELECT PO.[No_],PO.[Source No_]
+                       FROM [dbo].[BKI foods a_s$Production Order] AS PO
+                       INNER JOIN [dbo].[BKI foods a_s$Item] AS I
+                           ON PO.[Source No_] = I.[No_]
+                       WHERE PO.[Status] IN (2,3,4)
+                           AND I.[Item Category Code] <> 'RÅKAFFE' """
+df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+
 def get_nav_order_info(order_no):
     if order_no in df_nav_order_info['Ordrenummer'].tolist():
         df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
@@ -267,7 +270,7 @@ class rework():
                         AND RT.[Silo] = '{silo}'
                         AND DATEADD(D, DATEDIFF(D, 0, RT.[Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
                     GROUP BY RP.[Produktionsordrenummer] """
-            df_temp = pd.read_sql(query, con_04)
+            df_temp = pd.read_sql(query, con_ds)
             if len(df_temp) == 0:
                 return None
             else:
@@ -289,7 +292,7 @@ class rework():
                        GROUP BY
                        DATEADD(D, DATEDIFF(D, 0, [Registreringstidspunkt] ), 0)
                        ,[Silo],[Reworktype] """
-            df_ds = pd.read_sql(query_ds, con_04)
+            df_ds = pd.read_sql(query_ds, con_ds)
             df_total = pd.DataFrame()
             if len(df_ds) == 0:
                 return None
@@ -330,7 +333,7 @@ class rework():
                        WHERE Kilde = 2 AND [Silo] = '{silo}'
                        AND DATEADD(D, DATEDIFF(D, 0, [Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
                        GROUP BY [Referencenummer] """
-            df_ds = pd.read_sql(query_ds, con_04)
+            df_ds = pd.read_sql(query_ds, con_ds)
             if len(df_ds) == 0:
                 return None
             else:
@@ -350,7 +353,7 @@ class rework():
                        WHERE Kilde = 3 AND [Silo] = '{silo}'
                        AND DATEADD(D, DATEDIFF(D, 0, [Registreringstidspunkt] ), 0) BETWEEN '{start_date}' AND '{end_date}'
                        GROUP BY [Startdato],[Silo],[Reworktype] """
-            df_ds = pd.read_sql(query_ds, con_04)
+            df_ds = pd.read_sql(query_ds, con_ds)
             df_total = pd.DataFrame()
             if len(df_ds) == 0:
                 return None

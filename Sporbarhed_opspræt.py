@@ -12,24 +12,15 @@ import networkx as nx
 import Sporbarhed_shared_functions as ssf
 
 
-
 def initiate_report(initiate_id):
 
     # =============================================================================
     # Variables for query connections
     # =============================================================================
-    server_04 = 'sqlsrv04'
-    db_04 = 'BKI_Datastore'
-    con_04 = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_04};DATABASE={db_04};autocommit=True')
-    cursor_04 = con_04.cursor()
-    
-    server_nav = r'SQLSRV03\NAVISION'
-    db_nav = 'NAV100-DRIFT'
-    con_nav = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_nav};DATABASE={db_nav};Trusted_Connection=yes')
-    
-    server_probat = '192.168.125.161'
-    db_probat = 'BKI_IMP_EXP'
-    con_probat = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server_probat};DATABASE={db_probat};uid=bki_read;pwd=Probat2016')
+    con_04 = ssf.get_connection('bki_datastore')
+    cursor_04 = ssf.get_cursor('bki_datastore')
+    con_nav = ssf.get_connection('navision')
+    con_probat = ssf.get_connection('probat')
     
     # =============================================================================
     # Read data from request
@@ -73,7 +64,7 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = r'\\filsrv01\BKI\11. Økonomi\04 - Controlling\NMO\4. Kvalitet\Sporbarhedstest\Tests via PowerApps'
+    filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
     
     doc = docx.Document()

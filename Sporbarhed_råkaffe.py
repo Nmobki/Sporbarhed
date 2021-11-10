@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
 import pandas as pd
-import docx
-from docx.shared import Inches
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
 
@@ -45,7 +42,6 @@ def initiate_report(initiate_id):
     req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
     script_name = 'Sporbarhed_råkaffe.py'
-    timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
     orders_top_level = [req_reference_no]
     orders_related = []
     df_sections = ssf.get_ds_reporttype(req_id)
@@ -64,21 +60,6 @@ def initiate_report(initiate_id):
     # =============================================================================
     filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
-
-    doc = docx.Document()
-    doc.add_heading(f'Rapport for produktionsordre {req_reference_no}',0)
-    doc.sections[0].header.paragraphs[0].text = f'{script_name}'
-    doc.sections[0].footer.paragraphs[0].text = f'{timestamp}'
-    doc.sections[0].page_width = docx.shared.Mm(297)
-    doc.sections[0].page_height = docx.shared.Mm(210)
-    doc.sections[0].top_margin = docx.shared.Mm(15)
-    doc.sections[0].bottom_margin = docx.shared.Mm(15)
-    doc.sections[0].left_margin = docx.shared.Mm(10)
-    doc.sections[0].right_margin = docx.shared.Mm(10)
-    doc.sections[0].orientation = docx.enum.section.WD_ORIENT.LANDSCAPE
-
-    doc_name = f'{file_name}.docx'
-    path_file_doc = filepath + r'\\' + doc_name
 
     wb_name = f'{file_name}.xlsx'
     path_file_wb = filepath + r'\\' + wb_name
@@ -593,9 +574,8 @@ def initiate_report(initiate_id):
             df_nav_generelt = df_nav_generelt[column_order].transpose()
             df_nav_generelt = df_nav_generelt.reset_index()
             df_nav_generelt.columns = ['Sektion','Værdi']
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_nav_generelt, section_name, True)
-            ssf.add_section_to_word(doc, df_nav_generelt, section_name, True, [0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -624,9 +604,8 @@ def initiate_report(initiate_id):
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_total, section_name, False, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -666,9 +645,8 @@ def initiate_report(initiate_id):
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -721,9 +699,8 @@ def initiate_report(initiate_id):
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -774,9 +751,8 @@ def initiate_report(initiate_id):
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -818,9 +794,8 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            # ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -864,9 +839,8 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
-            # ssf.add_section_to_word(doc, df_temp_total, section_name, True, [-1,0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -935,9 +909,8 @@ def initiate_report(initiate_id):
 
     if ssf.get_section_status_code(df_massebalance) == 99:
         try:
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_massebalance, section_name, True)
-            ssf.add_section_to_word(doc, df_massebalance, section_name, True, [0,4,5,7,8,10,11,13,14,18,19])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -971,9 +944,8 @@ def initiate_report(initiate_id):
             df_temp_orders.dropna(inplace=True)
             df_temp_orders = df_temp_orders[column_order]
             df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_orders, section_name, False)
-            ssf.add_section_to_word(doc, df_temp_orders, section_name, True, [0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
     # =================================================================
@@ -998,8 +970,6 @@ def initiate_report(initiate_id):
                 graph.add_edges_from(array_for_drawing)
                 relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
                 relations_plot.write_png(path_png_relations)
-                # Add image to word document
-                doc.add_picture(path_png_relations, width=Inches(11.0), height=Inches(6.50))
                 # Write to log
                 ssf.section_log_insert(req_id, 19, 0)
             except Exception as e: # Insert error into log. Same section_id as others..
@@ -1024,9 +994,8 @@ def initiate_report(initiate_id):
                 df_ds_karakterer[col] = df_ds_karakterer[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_ds_karakterer['Registreringstidspunkt'] = df_ds_karakterer['Registreringstidspunkt'].dt.strftime('%d-%m-%Y')
             df_ds_karakterer.sort_values(by=['Id'], inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_ds_karakterer, section_name, False)
-            ssf.add_section_to_word(doc, df_ds_karakterer, section_name, False, [0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -1050,9 +1019,8 @@ def initiate_report(initiate_id):
                 df_probat_gc_samples[col] = df_probat_gc_samples[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
             df_probat_gc_samples['Dato'] = df_probat_gc_samples['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_gc_samples.sort_values(by=['Probat id'], inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_probat_gc_samples, section_name, False)
-            ssf.add_section_to_word(doc, df_probat_gc_samples, section_name, True, [0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -1071,9 +1039,8 @@ def initiate_report(initiate_id):
         try:
             df_section_log['Registreringstidspunkt'] = df_section_log['Registreringstidspunkt'].dt.strftime('%H:%M%:%S')
             df_section_log.sort_values(by=['Sektionskode'], inplace=True)
-            # Write results to Word and Excel
+            # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_section_log, section_name, False)
-            ssf.add_section_to_word(doc, df_section_log, section_name, False, [0])
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log
@@ -1084,9 +1051,6 @@ def initiate_report(initiate_id):
     #Save files
     excel_writer.save()
     ssf.log_insert(script_name, f'Excel file {file_name} created')
-
-    doc.save(path_file_doc)
-    ssf.log_insert(script_name, f'Word document {file_name} created')
 
     # =============================================================================
     # Write into email log

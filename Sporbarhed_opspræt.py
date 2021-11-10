@@ -25,7 +25,7 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Read data from request
     # =============================================================================
-    query_ds_request =  f""" SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager]
+    query_ds_request =  f""" SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtager], [Dato]
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
@@ -43,13 +43,11 @@ def initiate_report(initiate_id):
     req_recipients = df_request.loc[0, 'Rapport_modtager']
     req_note = df_request.loc[0, 'Note_forespørgsel']
     req_id = df_request.loc[0, 'Id']
-    req_modtagelse = df_request.loc[0, 'Modtagelse']
+    req_dato = df_request.loc[0, 'Dato']
     req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
     
-    script_name = 'Sporbarhed_samlet.py'
+    script_name = 'Sporbarhed_opspræt.py'
     timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-    orders_top_level = [req_reference_no]
-    orders_related = []
     df_sections = ssf.get_ds_reporttype(req_id)
     
     # =============================================================================

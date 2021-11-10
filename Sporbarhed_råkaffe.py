@@ -44,7 +44,7 @@ def initiate_report(initiate_id):
     req_modtagelse = df_request.loc[0, 'Modtagelse']
     req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
 
-    script_name = 'Sporbarhed_samlet.py'
+    script_name = 'Sporbarhed_råkaffe.py'
     timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
     orders_top_level = [req_reference_no]
     orders_related = []

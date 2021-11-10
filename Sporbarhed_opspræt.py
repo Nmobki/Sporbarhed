@@ -6,14 +6,12 @@ from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine
 import pyodbc
-import docx
-from docx.shared import Inches
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
 
 
 def initiate_report(initiate_id):
-
+    pass
     # =============================================================================
     # Variables for query connections
     # =============================================================================
@@ -64,21 +62,6 @@ def initiate_report(initiate_id):
     # =============================================================================
     filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
-    
-    doc = docx.Document()
-    doc.add_heading(f'Rapport for produktionsordre {req_reference_no}',0)
-    doc.sections[0].header.paragraphs[0].text = f'{script_name}'
-    doc.sections[0].footer.paragraphs[0].text = f'{timestamp}'
-    doc.sections[0].page_width = docx.shared.Mm(297)
-    doc.sections[0].page_height = docx.shared.Mm(210)
-    doc.sections[0].top_margin = docx.shared.Mm(15)
-    doc.sections[0].bottom_margin = docx.shared.Mm(15)
-    doc.sections[0].left_margin = docx.shared.Mm(10)
-    doc.sections[0].right_margin = docx.shared.Mm(10)
-    doc.sections[0].orientation = docx.enum.section.WD_ORIENT.LANDSCAPE
-    
-    doc_name = f'{file_name}.docx'
-    path_file_doc = filepath + r'\\' + doc_name
     
     wb_name = f'{file_name}.xlsx'
     path_file_wb = filepath + r'\\' + wb_name

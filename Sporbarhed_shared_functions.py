@@ -179,28 +179,6 @@ def get_nav_order_info(order_no):
     else:
         return None
 
-# Add dataframe to word document
-def add_section_to_word(document, dataframe, section, pagebreak, rows_to_bold):
-    # Add section header
-    document.add_heading(section, 1)
-    # Add a table with an extra row for headers
-    table = document.add_table(dataframe.shape[0]+1, dataframe.shape[1])
-    table.style = 'Table Grid'
-    # Add headers to top row
-    for i in range(dataframe.shape[-1]):
-        table.cell(0,i).text = dataframe.columns[i]
-    # Add data from dataframe to the table, replace supposed blank cells using function
-    for x in range(dataframe.shape[0]):
-        for y in range(dataframe.shape[-1]):
-            table.cell(x+1,y).text =  convert_placeholders_word(str(dataframe.values[x,y]))
-    # Bold total row if it exists
-    for y in rows_to_bold:
-        for x in range(dataframe.shape[1]):
-            table.rows[y].cells[x].paragraphs[0].runs[0].font.bold = True
-    # Add page break
-    if pagebreak:
-        document.add_page_break()
-
 # Get subject for emails depending on request type
 def get_email_subject(request_reference, request_type):
     dict_email_subject = {

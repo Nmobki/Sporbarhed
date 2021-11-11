@@ -3,6 +3,7 @@
 
 import pandas as pd
 import Sporbarhed_shared_server_information as sssi
+from datetime import datetime
 
 
 # =============================================================================
@@ -52,6 +53,19 @@ def get_ds_reporttype(request_type):
 					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
 					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Forespørgselstype] = {request_type} """
+    return pd.read_sql(query, con_ds)
+
+# Get information from section log
+def get_ds_section_log(request_id):
+    query = f""" SELECT	SL.[Sektion] AS [Sektionskode],S.[Beskrivelse] AS [Sektion]
+                ,SS.[Beskrivelse] AS [Status]
+                ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
+                FROM [trc].[Sporbarhed_sektion_log] AS SL
+                INNER JOIN [trc].[Sporbarhed_sektion] AS S
+                    ON SL.[Sektion] = S.[Id]
+                INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
+                    ON SL.[Statuskode] = SS.[Id]
+                WHERE SL.[Forespørgsels_id] = {request_id} """
     return pd.read_sql(query, con_ds)
 
 # Get section name for section from query
@@ -127,6 +141,16 @@ def strip_comma_from_string(text):
     text = text.rstrip(',')
     return text.lstrip(',')
 
+# Convert dates between formats
+def convert_date_format(date, existing_format, new_format):
+    if date is None:
+        new_date = None
+    elif existing_format == 'yyyy-mm-dd' and new_format == 'dd-mm-yyyy':
+        new_date = datetime.strptime(date, '%Y-%m-%d').strftime('%d-%m-%Y')
+    elif  existing_format == 'dd-mm-yyyy' and new_format == 'yyyy-mm-dd':
+        new_date = datetime.strptime(date, '%d-%m-%Y').strftime('%Y-%m-%d')
+    return new_date
+
 # Write into dbo.log
 def log_insert(event, note):
     dict_log = {'Note': note
@@ -190,18 +214,22 @@ def get_email_subject(request_reference, request_type):
     return str(dict_email_subject[request_type])
 
 
+# =============================================================================
+# Functions related to rework in seperate class only for organizational purposes
+# =============================================================================
+
 class rework():
     # Get last empty signal from a given silo before requested date
     def get_silo_last_empty(silo, date):
         query = f""" SELECT	MAX(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
                      WHERE [SILO] = '{silo}'
-                     DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) < '{date}' """
+                     AND DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) < '{date}' """
         df = pd.read_sql(query, con_probat)
-        if len(df) == 0:
+        if len(df) == 0 or df['Dato'].iloc[0] == None:
             return None
         else:
-            df['Dato'].strftime('%Y-%m-%d')
+            df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
             return str(df['Dato'].iloc[0])
     
     # Get the first empty signal from a given silo after the requested date
@@ -209,13 +237,48 @@ class rework():
         query = f""" SELECT	MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
                      WHERE [SILO] = '{silo}'
-                     DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) > '{date}' """
+                     AND DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) > '{date}' """
         df = pd.read_sql(query, con_probat)
-        if len(df) == 0:
+        if len(df) == 0 or df['Dato'].iloc[0] == None:
             return None
         else:
-            df['Dato'].strftime('%Y-%m-%d')
-            return str(df['Dato'].iloc[0])
+            df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        return str(df['Dato'].iloc[0])
+    
+    # Get the type of rework from the silo
+    def get_rework_type(silo):
+        if silo in ['401','403']:
+            rework_type = 'Helbønne'
+        elif silo in ['511','512']:
+            rework_type = 'Formalet'
+        return rework_type
+    
+    # Get grinding orders that have used rework from the requested silos between relevant dates
+    def get_rework_orders_from_dates(silo, start_date, end_date):
+        if None in (silo, start_date):
+            return None
+        # Set end_date to todays date if input end_date is None
+        if end_date in ('', None):
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        query = f""" WITH [ORDERS_CTE] AS (
+                SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
+                    ,[SOURCE] AS [Silo],[ORDER_NAME] AS [Ordrenummer]
+                	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
+                FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
+                WHERE [ORDER_NAME] IS NOT NULL
+                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                    ,[SOURCE],[ORDER_NAME]
+                UNION ALL
+                SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                    ,[DEST_NAME],[ORDER_NAME],SUM([WEIGHT]) / 1000.0
+                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                WHERE [ORDER_NAME] IS NOT NULL
+                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
+                    ,[DEST_NAME],[ORDER_NAME] )
+                SELECT * FROM [ORDERS_CTE]
+                WHERE [Silo] = '{silo}' AND [Dato] BETWEEN '{start_date}' AND '{end_date}' """
+        df = pd.read_sql(query, con_probat)
+        return df
     
     # Get a dataframe containing all orders which have used rework silos as well as use dates
     def get_rework_silos(orders_string):
@@ -381,3 +444,102 @@ class rework():
                 # Concat each function to one dataframe
                 df_rework = pd.concat([df_rework, df_prøvesmagning, df_pakkeri, df_komprimatorrum, df_henstandsprøver])
         return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
+    
+class finished_goods():
+    # Recursive query to get lotnumbers related to any of the input orders.
+    def get_nav_lotnos_from_orders(orders_string, return_type):
+        query = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                                  WHERE [Order No_] IN ({orders_string})
+                                  AND [Entry Type] = 6
+                                  UNION ALL
+                                  SELECT ILE_O.[Lot No_]
+                                  FROM [LOT_ORG]
+                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
+                                      ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
+                                      AND [ILE_C].[Entry Type] IN (5,8)
+                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
+                                	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
+                                      AND ILE_O.[Entry Type] IN (6,9)
+                                  INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
+    								  ON ILE_O.[Item No_] = I.[No_]
+								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
+                                  SELECT [Lot No_] AS [Lot]
+                                  FROM [LOT_ORG] GROUP BY [Lot No_] """
+        df = pd.read_sql(query, con_nav)
+        if return_type == 'dataframe':
+            return df
+        elif return_type == 'string':
+            return string_to_sql(df['Lot'].unique().tolist())
+    
+    # Get information per Order no. based on string of requested lotnumbers.
+    def get_production_information(lotnumbers):
+        query = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
+    							  WHERE [Entry Type] IN (6,9)
+    							  GROUP BY [Lot No_], [Document No_])
+                                  SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
+                            	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
+                            		THEN ILE.[Quantity] * I.[Net Weight]
+                            		ELSE 0 END) AS [Produceret]
+                            	,SUM(CASE WHEN ILE.[Entry Type] = 1
+                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                            		ELSE 0 END) AS [Salg]
+                            	,SUM(CASE WHEN ILE.[Entry Type] NOT IN (0,1,6,9)
+                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
+                            		ELSE 0 END) AS [Regulering & ompak]
+                            	,SUM(ILE.[Remaining Quantity] * I.[Net Weight]) AS [Restlager]
+                                FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                                INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
+                                	ON ILE.[Item No_] = I.[No_]
+                                INNER JOIN [LOT_SINGLE]
+                                	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
+    							WHERE ILE.[Lot No_] IN ({lotnumbers})
+                                GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
+        return pd.read_sql(query, con_nav)
+    
+    # Get information about any sales to any customers based on input list of lotnumbers.
+    def get_sales_information(lotnumbers):
+        query = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
+                          FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+    					  WHERE [Entry Type] IN (6,9) 
+    					  GROUP BY [Lot No_],[Document No_] )
+    
+                          SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn], LOT_SINGLE.[Produktionsordrenummer]
+                        	  ,ILE.[Posting Date] AS [Dato]
+                        	  ,ILE.[Item No_] AS [Varenummer]
+                        	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
+                        	  ,SUM(ILE.[Quantity] * I.[Net Weight] * -1) AS [Kilo]
+                          FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                          INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
+                        	  ON ILE.[Item No_] = I.[No_]
+                          INNER JOIN [LOT_SINGLE]
+                          	  ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
+                          INNER JOIN [dbo].[BKI foods a_s$Customer] (NOLOCK) AS C
+                        	  ON ILE.[Source No_] = C.[No_]
+                          WHERE ILE.[Entry Type] = 1
+    						AND ILE.[Lot No_] IN ({lotnumbers})
+                          GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer] """
+        return pd.read_sql(query, con_nav)
+    
+    def get_order_relationship(lotnumbers):
+        query = f""" WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                                  WHERE [Entry Type] IN (5,8)
+                                  GROUP BY [Lot No_], [Document No_] )
+                                  ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
+                                  WHERE [Entry Type] IN (6,9)
+                                  GROUP BY [Lot No_], [Document No_] )
+                                  SELECT DO.[Document No_] AS [Relateret ordre]
+                                  ,DC.[Document No_] AS [Ordrenummer]
+                                  ,'Navision forbrug' AS [Kilde]
+                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
+                                  INNER JOIN [DOC_OUT] AS DO
+                                      ON ILE.[Lot No_] = DO.[Lot No_]
+                                  LEFT JOIN [DOC_CONS] AS DC
+                                      ON ILE.[Lot No_] = DC.[Lot No_]
+                                  WHERE DC.[Document No_] IS NOT NULL
+    							  AND ILE.[Lot No_] IN ({lotnumbers})
+                                  GROUP BY DO.[Document No_] ,DC.[Document No_] """
+        return pd.read_sql(query, con_nav)

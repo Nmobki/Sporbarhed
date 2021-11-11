@@ -45,7 +45,7 @@ def initiate_report(initiate_id):
     orders_top_level = [req_reference_no]
     orders_related = []
     df_sections = ssf.get_ds_reporttype(req_id)
-    # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
+    # Read setup for section for reporttype
     df_sections = ssf.get_ds_reporttype(req_type)
     # =============================================================================
     # Update request that it is initiated and write into log
@@ -61,16 +61,16 @@ def initiate_report(initiate_id):
     # =============================================================================
     filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
-
+    # Excel workbook
     wb_name = f'{file_name}.xlsx'
     path_file_wb = filepath + r'\\' + wb_name
     excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
-
+    # Relationship diagram
     png_relations_name = f'{file_name}.png'
     path_png_relations = filepath + r'\\' + png_relations_name
 
     # =============================================================================
-    # SQL queries for each section unique for this script
+    # Data fetching for sections throughout script
     # =============================================================================
 
     # General info from Navision
@@ -130,7 +130,7 @@ def initiate_report(initiate_id):
     df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
 
     # Information from Probat for the processing of coffee
-    query_probat_processing = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
+    query_probat_processing = f""" IF '{req_modtagelse}' = 'None' -- Ingen modtagelse tastet
                               BEGIN
                               SELECT [DESTINATION] AS [Silo]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
@@ -145,7 +145,7 @@ def initiate_report(initiate_id):
                               WHERE [Kontrakt] = '{req_reference_no}' AND [Placering]  LIKE '2__'
                               GROUP BY [Placering]
                               END
-                              IF 'None' <> 'None' -- Modtagelse tastet
+                              IF '{req_modtagelse}' <> 'None' -- Modtagelse tastet
                               BEGIN
                               SELECT [DESTINATION] AS [Silo]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
@@ -167,14 +167,14 @@ def initiate_report(initiate_id):
     df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
 
     # Get order numbers the requested coffee has been used in
-    query_probat_used_in_roast = f""" IF 'None' = 'None' -- Ingen modtagelse tastet
+    query_probat_used_in_roast = f""" IF '{req_modtagelse}' = 'None' -- Ingen modtagelse tastet
                                BEGIN
                                SELECT [ORDER_NAME]
                                FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
                                WHERE [S_CONTRACT_NO] = '{req_reference_no}'
                                GROUP BY [ORDER_NAME]
                                END
-                               IF 'None' <> 'None' -- Modtagelse tastet
+                               IF '{req_modtagelse}' <> 'None' -- Modtagelse tastet
                                BEGIN
                                SELECT [ORDER_NAME]
                                FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
@@ -189,7 +189,7 @@ def initiate_report(initiate_id):
     sql_roast_orders = ssf.string_to_sql(roast_orders)
 
     # Green coffee used for roasting
-    query_probat_roast_input = f""" IF 'None' = 'None'
+    query_probat_roast_input = f""" IF '{req_modtagelse}' = 'None'
                                 BEGIN
                                 SELECT [CUSTOMER_CODE] AS [Varenummer]
                                 ,[ORDER_NAME] AS [Ordrenummer]
@@ -203,7 +203,7 @@ def initiate_report(initiate_id):
                                 GROUP BY  [CUSTOMER_CODE] 
                                 ,[ORDER_NAME] ,[DESTINATION]
                                 END
-                                IF 'None' <> 'None'
+                                IF '{req_modtagelse}' <> 'None'
                                 BEGIN
                                 SELECT [CUSTOMER_CODE] AS [Varenummer]
                                 ,[ORDER_NAME] AS [Ordrenummer]
@@ -272,7 +272,7 @@ def initiate_report(initiate_id):
         df_probat_grinding_output = pd.DataFrame()
 
     # Get order relations from Probat for finished goods if possible
-    query_probat_orders = f""" IF 'None' = 'None' -- Modtagelse ikke defineret
+    query_probat_orders = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke defineret
                           BEGIN
                           -- Formalet kaffe
                           SELECT PG.[ORDER_NAME] AS [Ordrenummer],PG.[S_ORDER_NAME] AS [Relateret ordre],'Probat formalet pakkelinje' AS [Kilde]
@@ -303,7 +303,7 @@ def initiate_report(initiate_id):
                         	AND LG.[ORDER_NAME] <> ''
                           GROUP BY LG.[ORDER_NAME],LG.[S_ORDER_NAME]                      	
                           END
-                          IF 'None' <> 'None' -- Modtagelse defineret
+                          IF '{req_modtagelse}' <> 'None' -- Modtagelse defineret
                           BEGIN
                           -- Formalet kaffe
                           SELECT PG.[ORDER_NAME] AS [Ordrenummer],PG.[S_ORDER_NAME] AS [Relateret ordre],'Probat formalet pakkelinje' AS [Kilde]
@@ -369,7 +369,7 @@ def initiate_report(initiate_id):
     df_nav_orders = ssf.finished_goods.get_order_relationship(nav_lotnots_total_sql_string)
 
     # Query to get karakterer saved in BKI_Datastore
-    query_ds_karakterer = f""" IF 'None' = 'None'
+    query_ds_karakterer = f""" IF '{req_modtagelse}' = 'None'
                           BEGIN
                           SELECT SK.[Id],RRP.[Id] AS [Risteri id],SK.[Bruger] AS [Person],SK.[Dato] AS [Registreringstidspunkt]
                           ,SK.[Smag_Syre] AS [Syre],SK.[Smag_Krop] AS [Krop],SK.[Smag_Aroma] AS [Aroma],SK.[Smag_Eftersmag] AS [Eftersmag]
@@ -384,7 +384,7 @@ def initiate_report(initiate_id):
                         	ON SK.[Status] = S.[Id]
                           WHERE SK.[Kontraktnummer] = '{req_reference_no}'
                           END
-                          IF 'None' <> 'None'
+                          IF '{req_modtagelse}' <> 'None'
                           BEGIN
                           SELECT SK.[Id],RRP.[Id] AS [Risteri id],SK.[Bruger] AS [Person],SK.[Dato] AS [Registreringstidspunkt]
                           ,SK.[Smag_Syre] AS [Syre],SK.[Smag_Krop] AS [Krop],SK.[Smag_Aroma] AS [Aroma],SK.[Smag_Eftersmag] AS [Eftersmag]
@@ -402,7 +402,8 @@ def initiate_report(initiate_id):
                           END """
     df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_ds)
 
-    query_probat_gc_samples = f""" IF 'None' = 'None'
+    # Samples for green coffees from Probat
+    query_probat_gc_samples = f""" IF '{req_modtagelse}' = 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
                             ,[HUMIDITY_1] / 100000.0 AS [Vandprocent 1],[HUMIDITY_2] / 100000.0 AS [Vandprocent 2]
@@ -411,7 +412,7 @@ def initiate_report(initiate_id):
                             WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
                             	AND [CONTRACT_NO] = '{req_reference_no}'
                             END
-                            IF 'None' <> 'None'
+                            IF '{req_modtagelse}' <> 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
                             ,[HUMIDITY_1] AS [Vandprocent 1],[HUMIDITY_2] AS [Vandprocent 2],[HUMIDITY_3] AS [Vandprocent 3]

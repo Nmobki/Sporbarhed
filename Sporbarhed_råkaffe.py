@@ -183,11 +183,12 @@ def initiate_report(initiate_id):
                                GROUP BY [ORDER_NAME]
                                END """
     df_probat_used_in_roast = pd.read_sql(query_probat_used_in_roast, con_probat)
+
     # Convert orders to string for use in later queries
     roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
     sql_roast_orders = ssf.string_to_sql(roast_orders)
-    # Green coffee used for roasting
 
+    # Green coffee used for roasting
     query_probat_roast_input = f""" IF 'None' = 'None'
                                 BEGIN
                                 SELECT [CUSTOMER_CODE] AS [Varenummer]
@@ -221,8 +222,8 @@ def initiate_report(initiate_id):
         df_probat_roast_input = pd.read_sql(query_probat_roast_input, con_probat)
     else:
         df_probat_roast_input = pd.DataFrame()
-    # Output from roasters
 
+    # Output from roasters
     query_probat_roast_output = f""" SELECT
                                 DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                                 ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
@@ -341,15 +342,9 @@ def initiate_report(initiate_id):
 
     # Join previous found orders to one list for query below
     sql_related_orders = ssf.string_to_sql(roast_orders + grinder_orders)
+    
     # Get related orders from Navision
-    query_nav_order_related = f""" SELECT [Prod_ Order No_] AS [Ordrenummer]
-                               ,[Reserved Prod_ Order No_] AS [Relateret ordre]
-                               ,'Navision reservationer' AS [Kilde]
-                               FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
-                               WHERE [Reserved Prod_ Order No_] IN 
-                               ({sql_related_orders})
-                               AND [Invalid] = 0 """
-    df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
+    df_nav_order_related = ssf.get_nav_orders_from_related_orders(sql_related_orders)
 
     # Get list of orders and append to lists if they do not already exist
     # Merge Probat and NAV orders before merging
@@ -358,25 +353,9 @@ def initiate_report(initiate_id):
     probat_orders_top = df_probat_orders_top['Ordrenummer'].unique().tolist()
     probat_orders_related = df_probat_orders_top['Relateret ordre'].unique().tolist()
 
-    # Create strings dependent on request relationsship type, defined when report is requested by user
-    if req_ordrelationstype == 0: # All
-        temp_orders_top = probat_orders_top + nav_orders_top
-        temp_orders_related = probat_orders_related + nav_orders_related
-    elif req_ordrelationstype == 1: # Just Probat
-        temp_orders_top = probat_orders_top
-        temp_orders_related = probat_orders_related
-    elif req_ordrelationstype == 2: # Just Navision
-        temp_orders_top = nav_orders_top
-        temp_orders_related = nav_orders_related
-
-    # If order doesn't exist in list, append:
-    for order in temp_orders_top:
-        if order not in  orders_top_level:
-            orders_top_level.append(order)
-
-    for order in temp_orders_related:
-        if order not in orders_related:
-            orders_related.append(order)
+    # Create list dependent on request relationsship type, defined when report is requested by user
+    orders_top_level = ssf.extend_order_list(req_ordrelationstype, orders_top_level, probat_orders_top, nav_orders_top)
+    orders_related = ssf.extend_order_list(req_ordrelationstype, orders_related, probat_orders_related, nav_orders_related)
     # String used for querying Navision, only finished goods
     req_orders_total = ssf.string_to_sql(orders_top_level)
 

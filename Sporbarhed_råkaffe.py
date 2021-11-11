@@ -45,7 +45,8 @@ def initiate_report(initiate_id):
     orders_top_level = [req_reference_no]
     orders_related = []
     df_sections = ssf.get_ds_reporttype(req_id)
-
+    # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
+    df_sections = ssf.get_ds_reporttype(req_type)
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
@@ -69,30 +70,7 @@ def initiate_report(initiate_id):
     path_png_relations = filepath + r'\\' + png_relations_name
 
     # =============================================================================
-    # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
-    # =============================================================================
-    query_ds_reporttypes =  f"""SELECT SRS.[Sektion], SS.[Beskrivelse] AS [Sektion navn]
-                           FROM [trc].[Sporbarhed_rapport_sektion] AS SRS
-    					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
-    					   ON SRS.[Sektion] = SS.[Id]
-                           WHERE [Forespørgselstype] = {req_type} """
-    df_sections = pd.read_sql(query_ds_reporttypes, con_ds)
-
-
-    # Query section log for each section logged per script-run.
-    # Query is only executed at the end of each class
-    query_ds_section_log = f""" SELECT	SL.[Sektion] AS [Sektionskode]
-                           ,S.[Beskrivelse] AS [Sektion],SS.[Beskrivelse] AS [Status]
-                           ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
-                           FROM [trc].[Sporbarhed_sektion_log] AS SL
-                           INNER JOIN [trc].[Sporbarhed_sektion] AS S
-                             	ON SL.[Sektion] = S.[Id]
-                           INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
-                                ON SL.[Statuskode] = SS.[Id]
-                           WHERE SL.[Forespørgsels_id] = {req_id} """
-
-    # =============================================================================
-    # SQL queries for each section
+    # SQL queries for each section unique for this script
     # =============================================================================
 
     # General info from Navision
@@ -402,103 +380,14 @@ def initiate_report(initiate_id):
     # String used for querying Navision, only finished goods
     req_orders_total = ssf.string_to_sql(orders_top_level)
 
-    # Recursive query to find all relevant produced orders related to the requested order
-    # First is identified all lotnumbers related to the orders identified through NAV reservations (only production orders)
-    # Next is a recursive part which identifies any document numbers which have consumed these lotnumbers (ILE_C)
-    # Which is then queried again to find all lotnumbers produced on the orders from which these lotnumbers originally came.
-
-    #First we find all relevant lot nos and store in string to be used in queries below
-    query_nav_lotnos_total = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                                  WHERE [Order No_] IN ({req_orders_total})
-                                  AND [Entry Type] = 6
-                                  UNION ALL
-                                  SELECT ILE_O.[Lot No_]
-                                  FROM [LOT_ORG]
-                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_C
-                                      ON [LOT_ORG].[Lot No_] = ILE_C.[Lot No_]
-                                      AND [ILE_C].[Entry Type] IN (5,8)
-                                  INNER JOIN [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE_O
-                                	  ON ILE_C.[Document No_] = ILE_O.[Document No_]
-                                      AND ILE_O.[Entry Type] IN (6,9)
-                                  INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-    								  ON ILE_O.[Item No_] = I.[No_]
-    								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
-                                  SELECT [Lot No_] AS [Lot]
-                                  FROM [LOT_ORG] GROUP BY [Lot No_] """
-    df_nav_lotnos_total = pd.read_sql(query_nav_lotnos_total, con_nav)
-    nav_lotnots_total_sql_string = ssf.string_to_sql(df_nav_lotnos_total['Lot'].unique().tolist())
-
-    # Find finished goods
-    query_nav_færdigvaretilgang = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
-    							  WHERE [Entry Type] IN (6,9)
-    							  GROUP BY [Lot No_], [Document No_])
-                                  SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
-                            	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
-                            		THEN ILE.[Quantity] * I.[Net Weight]
-                            		ELSE 0 END) AS [Produceret]
-                            	,SUM(CASE WHEN ILE.[Entry Type] = 1
-                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
-                            		ELSE 0 END) AS [Salg]
-                            	,SUM(CASE WHEN ILE.[Entry Type] NOT IN (0,1,6,9)
-                            		THEN ILE.[Quantity] * I.[Net Weight] * -1
-                            		ELSE 0 END) AS [Regulering & ompak]
-                            	,SUM(ILE.[Remaining Quantity] * I.[Net Weight]) AS [Restlager]
-                                FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
-                                INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-                                	ON ILE.[Item No_] = I.[No_]
-                                INNER JOIN [LOT_SINGLE]
-                                	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-    							WHERE ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
-                                GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
-    df_nav_færdigvaretilgang = pd.read_sql(query_nav_færdigvaretilgang, con_nav)
-
-    # Recursive query to get all customer who purchased identified lotnumbers.
-    # See explanation of query above
-    query_nav_debitorer = f"""   WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
-                          FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-    					  WHERE [Entry Type] IN (6,9) 
-    					  GROUP BY [Lot No_],[Document No_] )
-    
-                          SELECT C.[No_] AS [Debitornummer],C.[Name] AS [Debitornavn], LOT_SINGLE.[Produktionsordrenummer]
-                        	  ,ILE.[Posting Date] AS [Dato]
-                        	  ,ILE.[Item No_] AS [Varenummer]
-                        	  ,SUM(ILE.[Quantity] * -1) AS [Enheder]
-                        	  ,SUM(ILE.[Quantity] * I.[Net Weight] * -1) AS [Kilo]
-                          FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
-                          INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
-                        	  ON ILE.[Item No_] = I.[No_]
-                          INNER JOIN [LOT_SINGLE]
-                          	  ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
-                          INNER JOIN [dbo].[BKI foods a_s$Customer] (NOLOCK) AS C
-                        	  ON ILE.[Source No_] = C.[No_]
-                          WHERE ILE.[Entry Type] = 1
-    						AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
-                          GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer]  """
-    df_nav_debitorer = pd.read_sql(query_nav_debitorer, con_nav)
-
-    # Query to show relation between requested order and any orders which have used it as components
-    query_nav_orders = f"""  WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                                  WHERE [Entry Type] IN (5,8)
-                                  GROUP BY [Lot No_], [Document No_] )
-                                  ,[DOC_OUT] AS ( SELECT [Lot No_], [Document No_]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
-                                  WHERE [Entry Type] IN (6,9)
-                                  GROUP BY [Lot No_], [Document No_] )
-                                  SELECT DO.[Document No_] AS [Relateret ordre]
-                                  ,DC.[Document No_] AS [Ordrenummer]
-                                  ,'Navision forbrug' AS [Kilde]
-                                  FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) AS ILE
-                                  INNER JOIN [DOC_OUT] AS DO
-                                      ON ILE.[Lot No_] = DO.[Lot No_]
-                                  LEFT JOIN [DOC_CONS] AS DC
-                                      ON ILE.[Lot No_] = DC.[Lot No_]
-                                  WHERE DC.[Document No_] IS NOT NULL
-    							  AND ILE.[Lot No_] IN ({nav_lotnots_total_sql_string})
-                                  GROUP BY DO.[Document No_] ,DC.[Document No_] """
-    df_nav_orders = pd.read_sql(query_nav_orders, con_nav)
+    # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
+    nav_lotnots_total_sql_string = ssf.finished_goods.get_nav_lotnos_from_orders(req_orders_total, 'string')
+    # Get information about each production order based on lotnumbers identified above
+    df_nav_færdigvaretilgang = ssf.finished_goods.get_production_information(nav_lotnots_total_sql_string)
+    # Get information about any sales to any customers based on lotnumbers identified above
+    df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots_total_sql_string)
+    # Get relationship between requested order and any orders which have used it as components, based on lotnumbers identified above
+    df_nav_orders = ssf.finished_goods.get_order_relationship(nav_lotnots_total_sql_string)
 
     # Query to get karakterer saved in BKI_Datastore
     query_ds_karakterer = f""" IF 'None' = 'None'
@@ -1032,7 +921,7 @@ def initiate_report(initiate_id):
     # Section 18: Sektionslog
     # =============================================================================
     section_id = 18
-    df_section_log = pd.read_sql(query_ds_section_log, con_ds)
+    df_section_log = ssf.get_ds_section_log(req_id)
     section_name = ssf.get_section_name(section_id, df_sections)
 
     if ssf.get_section_status_code(df_section_log) == 99:

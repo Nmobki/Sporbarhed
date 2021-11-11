@@ -84,6 +84,19 @@ def get_section_status_code(dataframe):
     else:
         return 99 # Continue
 
+# Concatenate and extend list of orders based on chosen traceability type
+# 0 = all | 1 = just Probat | 2 = just Navision
+def extend_order_list(relationship_type, original_list, probat_list, navision_list):
+    dictionary = {
+        0: navision_list + probat_list
+        ,1: probat_list
+        ,2: navision_list }
+    temp_list = dictionary[relationship_type]
+    for order in temp_list:
+        if order not in original_list and order != '':
+            original_list.append(order)
+    return original_list
+
 # Write into section log
 def section_log_insert(request_id, section, statuscode, errorcode=None):
     df = pd.DataFrame(data={'Forespørgsels_id':request_id,
@@ -196,12 +209,23 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
                            AND I.[Item Category Code] <> 'RÅKAFFE' """
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
+# Get item number for requested order number
 def get_nav_order_info(order_no):
     if order_no in df_nav_order_info['Ordrenummer'].tolist():
         df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
         return df_temp['Varenummer'].iloc[0]
     else:
         return None
+
+# Get dataframe with 
+def get_nav_orders_from_related_orders(orders):
+    query = f""" SELECT [Prod_ Order No_] AS [Ordrenummer]
+                               ,[Reserved Prod_ Order No_] AS [Relateret ordre]
+                               ,'Navision reservationer' AS [Kilde]
+                               FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
+                               WHERE [Reserved Prod_ Order No_] IN 
+                               ({orders}) AND [Invalid] = 0 """
+    return pd.read_sql(query, con_nav)
 
 # Get subject for emails depending on request type
 def get_email_subject(request_reference, request_type):

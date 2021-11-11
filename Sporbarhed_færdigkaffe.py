@@ -295,28 +295,14 @@ def initiate_report(initiate_id):
     nav_orders_top = df_nav_order_related['Ordrenummer'].unique().tolist()
     nav_orders_related = df_nav_order_related['Relateret ordre'].unique().tolist()
 
-    # Create strings dependent on request relationsship type, defined when report is requested by user
-    if req_ordrelationstype == 0: # All
-        temp_orders_top = probat_orders_top + nav_orders_top
-        temp_orders_related = probat_orders_related + nav_orders_related
-    elif req_ordrelationstype == 1: # Just Probat
-        temp_orders_top = probat_orders_top
-        temp_orders_related = probat_orders_related
-    elif req_ordrelationstype == 2: # Just Navision
-        temp_orders_top = nav_orders_top
-        temp_orders_related = nav_orders_related
+    # Create list dependent on request relationsship type, defined when report is requested by user
+    orders_top_level = ssf.extend_order_list(req_ordrelationstype, orders_top_level, probat_orders_top, nav_orders_top)
+    orders_related = ssf.extend_order_list(req_ordrelationstype, orders_related, probat_orders_related, nav_orders_related)
     
-    # If order doesn't exist in list, append:
-    for order in temp_orders_top:
-        if order not in  orders_top_level and order != '':
-            orders_top_level.append(order)
-
-    for order in temp_orders_related:
-        if order not in orders_related:
-            orders_related.append(order)
-
-    req_orders_total = ssf.string_to_sql(orders_top_level) # String used for querying Navision, only finished goods
-    req_orders_related = ssf.string_to_sql(orders_related) # String used for querying Probat for relation between grinder and roaster for visualization
+    # String used for querying Navision, only finished goods
+    req_orders_total = ssf.string_to_sql(orders_top_level)
+    # String used for querying Probat for relation between grinder and roaster for visualization
+    req_orders_related = ssf.string_to_sql(orders_related)
 
     # Get Probat relation between grinder and roaster for visualization
     query_probat_lg_to_ulr = f""" SELECT [ORDER_NAME] AS [Ordrenummer]

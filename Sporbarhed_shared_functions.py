@@ -287,20 +287,20 @@ class rework():
         query = f""" WITH [ORDERS_CTE] AS (
                 SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
                     ,[SOURCE] AS [Silo],[ORDER_NAME] AS [Ordrenummer]
-                	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
                 FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
                 WHERE [ORDER_NAME] IS NOT NULL
                 GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                    ,[SOURCE],[ORDER_NAME]
+                    ,[ORDER_NAME], [SOURCE]
                 UNION ALL
                 SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                    ,[DEST_NAME],[ORDER_NAME],SUM([WEIGHT]) / 1000.0
+                    ,[DEST_NAME],[ORDER_NAME]
                 FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                 WHERE [ORDER_NAME] IS NOT NULL
                 GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                    ,[DEST_NAME],[ORDER_NAME] )
-                SELECT * FROM [ORDERS_CTE]
-                WHERE [Silo] = '{silo}' AND [Dato] BETWEEN '{start_date}' AND '{end_date}' """
+                    ,[ORDER_NAME], [DEST_NAME] )
+                SELECT [Dato], [Ordrenummer] FROM [ORDERS_CTE]
+                WHERE [Silo] = '{silo}' AND [Dato] BETWEEN '{start_date}' AND '{end_date}' 
+                GROUP BY  [Dato], [Ordrenummer] """
         df = pd.read_sql(query, con_probat)
         return df
     
@@ -566,4 +566,6 @@ class finished_goods():
                                   WHERE DC.[Document No_] IS NOT NULL
     							  AND ILE.[Lot No_] IN ({lotnumbers})
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
-        return pd.read_sql(query, con_nav)
+        return pd.read_sql(query, con_nav)       
+        
+        

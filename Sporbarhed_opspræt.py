@@ -172,7 +172,119 @@ def initiate_report(initiate_id):
     else:
         # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework_used_in))    
+
+    # =============================================================================
+    # Section 3: Færdigvaretilgang
+    # =============================================================================
+    section_id = 3
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
+    columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
+    columns_strip = ['Ordrenummer']
     
+    # Get order numbers for finished goods from Probat and Navision
+    query_probat_order_relations = f""" SELECT [ORDER_NAME] AS [Ordrenummer] 
+                                        ,[S_ORDER_NAME] AS ['Relateret ordre']
+                                        ,'Probat PG' AS [Kilde]
+                                        FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
+                                        WHERE [ORDER_NAME] <> ''
+                                        	AND [S_ORDER_NAME] IN ({rework_orders})
+                                        GROUP BY [ORDER_NAME],[S_ORDER_NAME] """
+    df_probat_order_relations = pd.read_sql(query_probat_order_relations, con_probat)
+    df_nav_order_relations = ssf.get_nav_orders_from_related_orders(rework_orders)
+    # Concat lists and convert list of orders to string used for sql
+    order_numbers_fg_sql = ssf.extend_order_list(req_ordrelationstype, [], 
+                                               df_probat_order_relations['Ordrenummer'].unique().tolist(),
+                                               df_nav_order_relations['Ordrenummer'].unique().tolist())
+    order_numbers_fg_sql = ssf.string_to_sql(order_numbers_fg_sql)
+    # Get string of lotnots
+    nav_lotnots = ssf.finished_goods.get_nav_lotnos_from_orders(order_numbers_fg_sql, 'string')
+    # Get results from Navision
+    df_nav_færdigvaretilgang = ssf.finished_goods.get_production_information(nav_lotnots)
+
+    if ssf.get_section_status_code(df_nav_færdigvaretilgang) == 99:
+        try:
+            # Concat order numbers to one string
+            df_nav_færdigvaretilgang = df_nav_færdigvaretilgang.groupby(['Varenummer','Varenavn']).agg(
+               {'Ordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                'Produceret': 'sum',
+                'Salg': 'sum',
+                'Restlager': 'sum',
+                'Regulering & ompak': 'sum'
+               }).reset_index()
+            # Remove trailing and leading commas
+            for col in columns_strip:
+                df_nav_færdigvaretilgang[col] = df_nav_færdigvaretilgang[col].apply(lambda x: ssf.strip_comma_from_string(x))
+            # Create total for dataframe
+            dict_færdigvare_total = {'Produceret': df_nav_færdigvaretilgang['Produceret'].sum(),
+                                     'Salg': df_nav_færdigvaretilgang['Salg'].sum(),
+                                     'Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
+                                     'Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum()
+                                     }
+            df_nav_færdigvaretilgang = pd.concat([df_nav_færdigvaretilgang, 
+                                                  pd.DataFrame(dict_færdigvare_total, index=[0])])
+            df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
+            df_nav_færdigvaretilgang.sort_values(by=['Varenummer'], inplace=True)
+            # Data formating
+            for col in columns_1_dec:
+                df_nav_færdigvaretilgang[col] = df_nav_færdigvaretilgang[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_nav_færdigvaretilgang, section_name, False)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_færdigvaretilgang))
+
+    
+    # =============================================================================
+    # Section 8: Massebalance
+    # =============================================================================
+    section_id = 8
+    section_name = ssf.get_section_name(section_id, df_sections)
+    columns_1_dec = ['[1] Kilo formalet','[2] Kilo færdigvarer','[3] Difference','[5] Salg',
+                     '[6] Restlager','[7] Regulering & ompak','[8] Difference']
+    columns_2_pct = ['[4] Difference pct','[9] Difference pct']
+
+    dict_massebalance = {'[1] Kilo formalet': dict_rework_used_in_total['Kilo'],
+                         '[2] Kilo færdigvarer': dict_færdigvare_total['Produceret'],
+                         '[3] Difference': None,
+                         '[4] Difference pct': None,
+                         '[5] Salg': dict_færdigvare_total['Salg'],
+                         '[6] Restlager': dict_færdigvare_total['Restlager'],
+                         '[7] Regulering & ompak': dict_færdigvare_total['Regulering & ompak'],
+                         '[8] Difference': None,
+                         '[9] Difference pct': None
+                        }
+    # Calculate differences and percentages before converting to dataframe:
+    dict_massebalance['[3] Difference'] = dict_massebalance['[1] Kilo formalet'] - dict_massebalance['[2] Kilo færdigvarer']
+    dict_massebalance['[4] Difference pct'] = ssf.zero_division(dict_massebalance['[3] Difference'], dict_massebalance['[1] Kilo formalet'], 'None')
+    dict_massebalance['[8] Difference'] = ( dict_massebalance['[2] Kilo færdigvarer'] - dict_massebalance['[5] Salg']
+                                            - dict_massebalance['[6] Restlager'] - dict_massebalance['[7] Regulering & ompak'] )
+    dict_massebalance['[9] Difference pct'] = ssf.zero_division(dict_massebalance['[8] Difference'], dict_massebalance['[2] Kilo færdigvarer'], 'None')
+    # Number formating
+    for col in columns_1_dec:
+        dict_massebalance[col] = ssf.number_format(dict_massebalance[col] ,'dec_1')
+    for col in columns_2_pct:
+        dict_massebalance[col] = ssf.number_format(dict_massebalance[col] ,'pct_2')
+
+    df_massebalance = pd.DataFrame.from_dict(data=dict_massebalance, orient='index').reset_index()
+    df_massebalance.columns = ['Sektion','Værdi']
+    df_massebalance['Note'] = [None,None,'[1]-[2]','[3]/[1]',None,None,None,'[2]-[5]-[6]-[7]','[8]/[2]']
+    df_massebalance['Bemærkning'] = None
+
+    if ssf.get_section_status_code(df_massebalance) == 99:
+        try:
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_massebalance, section_name, True)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_massebalance))
+
     # =============================================================================
     # Section 18: Sektionslog
     # =============================================================================

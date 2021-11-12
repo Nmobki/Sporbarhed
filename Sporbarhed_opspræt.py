@@ -237,6 +237,51 @@ def initiate_report(initiate_id):
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_færdigvaretilgang))
 
+    # =============================================================================
+    # Section 7: Debitorer
+    # =============================================================================
+    section_id = 7
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Debitornummer','Debitornavn','Dato','Varenummer','Varenavn','Produktionsordrenummer',
+                        'Enheder','Kilo']
+    columns_1_dec = ['Enheder','Kilo']
+    columns_strip = ['Produktionsordrenummer']
+    
+    df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots)
+    
+    if ssf.get_section_status_code(df_nav_debitorer) == 99:
+        try:
+            # Concat Order nos to one string
+            df_nav_debitorer = df_nav_debitorer.groupby(['Debitornummer','Debitornavn','Dato','Varenummer']).agg(
+                {'Produktionsordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                 'Enheder': 'sum',
+                 'Kilo': 'sum'
+                }).reset_index()
+            # Remove trailing and leading commas
+            for col in columns_strip:
+                df_nav_debitorer[col] = df_nav_debitorer[col].apply(lambda x: ssf.strip_comma_from_string(x))
+            # Create total for dataframe
+            dict_debitor_total = {'Enheder': [df_nav_debitorer['Enheder'].sum()],
+                                  'Kilo':[df_nav_debitorer['Kilo'].sum()]}
+            # Add varenavn
+            df_nav_debitorer['Varenavn'] = df_nav_debitorer['Varenummer'].apply(ssf.get_nav_item_info, field='Beskrivelse')
+             # Look up column values and string format datecolumn for export
+            df_nav_debitorer['Dato'] = df_nav_debitorer['Dato'].dt.strftime('%d-%m-%Y')
+            # Create temp dataframe with total
+            df_temp_total = pd.concat([df_nav_debitorer, pd.DataFrame.from_dict(data=dict_debitor_total, orient='columns')])
+            df_temp_total = df_temp_total[column_order]
+            df_temp_total.sort_values(by=['Varenummer','Debitornummer','Dato'], inplace=True)
+            # Data formating
+            for col in columns_1_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_debitorer))
     
     # =============================================================================
     # Section 8: Massebalance

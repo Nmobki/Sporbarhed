@@ -73,9 +73,8 @@ def initiate_report(initiate_id):
                       WHERE [Id] = {req_id} """)
     cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
-                           
-                           
-    # =============================================================================
+
+        # =============================================================================
     # Section 1: Generelt
     # =============================================================================
     section_id = 1
@@ -99,9 +98,11 @@ def initiate_report(initiate_id):
             ssf.insert_dataframe_into_excel(excel_writer, df_generelt, section_name, True)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
-        except Exception as e: # Insert error into log
+        except Exception as e:
+            # Insert error into log
             ssf.section_log_insert(req_id, section_id, 2, e)
-    else: # Write into log if no data is found or section is out of scope
+    else:
+        # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_generelt))                   
 
     # =============================================================================
@@ -119,9 +120,59 @@ def initiate_report(initiate_id):
     # =============================================================================
     section_id = 23
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = []
+    column_order = ['Dato','Ordrenummer','Varenummer','Varenavn','Kilo']
+    columns_1_dec = ['Kilo']
+    columns_strip = ['Dato']
+    
     df_rework_used_in = ssf.rework.get_rework_orders_from_dates(req_reference_no, silo_last_empty_ymd, silo_next_empty_ymd)
-    print(df_rework_used_in)
+    
+    if ssf.get_section_status_code(df_rework_used_in) == 99:
+        try:
+            # String of order numbers used for SQL query
+            rework_orders = ssf.string_to_sql(df_rework_used_in['Ordrenummer'].unique().tolist())
+            # Format dates to string
+            df_rework_used_in['Dato'] = df_rework_used_in['Dato'].dt.strftime('%d-%m-%Y')
+            # Concat dates into one string
+            df_rework_used_in = df_rework_used_in.groupby(['Ordrenummer']).agg(
+                {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
+                }).reset_index()
+            # Get output from grinders
+            query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
+                                   ,SUM([WEIGHT] / 1000.0) AS [Kilo]
+                                   FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
+                                   WHERE [ORDER_NAME] IN ({rework_orders})
+                                   GROUP BY [ORDER_NAME] """
+            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)  
+            # Join to input
+            df_rework_used_in = pd.merge(df_rework_used_in,
+                                         df_probat_grinding_output,
+                                         left_on = 'Ordrenummer',
+                                         right_on = 'Ordrenummer',
+                                         how = 'left',
+                                         suffixes = ('', '_R'))
+            # Column formating and lookups
+            for col in columns_strip:
+                df_rework_used_in[col] = df_rework_used_in[col].apply(lambda x: ssf.strip_comma_from_string(x))
+            df_rework_used_in['Varenummer'] = df_rework_used_in['Ordrenummer'].apply(lambda x: ssf.get_nav_order_info(x))
+            df_rework_used_in['Varenavn'] = df_rework_used_in['Varenummer'].apply(ssf.get_nav_item_info, field = 'Beskrivelse')
+            # Create total for dataframe
+            dict_rework_used_in_total = {'Kilo': df_rework_used_in['Kilo'].sum()}
+            # Add total to dataframe and format decimals on kilo column
+            df_rework_used_in = pd.concat([df_rework_used_in, pd.DataFrame([dict_rework_used_in_total])])
+            for col in columns_1_dec:
+                df_rework_used_in[col] = df_rework_used_in[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            df_rework_used_in = df_rework_used_in[column_order]
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used_in, section_name, True)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        # Insert error into log
+        except Exception as e:
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else:
+        # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework_used_in))    
+    
     # =============================================================================
     # Section 18: Sektionslog
     # =============================================================================
@@ -137,9 +188,11 @@ def initiate_report(initiate_id):
             ssf.insert_dataframe_into_excel(excel_writer, df_section_log, section_name, False)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
-        except Exception as e: # Insert error into log
+        # Insert error into log
+        except Exception as e:
             ssf.section_log_insert(req_id, section_id, 2, e)
-    else: # Write into log if no data is found or section is out of scope
+    else:
+        # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_section_log))
 
     # Save file

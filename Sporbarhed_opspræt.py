@@ -389,12 +389,13 @@ def initiate_report(initiate_id):
                 df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
                 df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
                 df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
-                # Prepare and add source of rework to main plot
+                # Prepare and add source of rework to main plot. Only concat dataframes if secondary contains data
                 df_temp_rework_relation = df_rework_used
-                df_temp_rework_relation['Primær'] = 'Rework kilde\n' + df_temp_rework_relation['Kilde']
-                df_temp_rework_relation['Sekundær'] = df_temp_rework_relation['Produktionsordre']
-                df_temp_rework_relation = df_temp_rework_relation[['Primær','Sekundær']]
-                df_temp_order_relation = pd.concat([df_temp_order_relation,df_temp_rework_relation])
+                if len(df_temp_rework_relation) != 0:
+                    df_temp_rework_relation['Primær'] = 'Rework kilde\n' + df_temp_rework_relation['Kilde']
+                    df_temp_rework_relation['Sekundær'] = df_temp_rework_relation['Produktionsordre']
+                    df_temp_rework_relation = df_temp_rework_relation[['Primær','Sekundær']]
+                    df_temp_order_relation = pd.concat([df_temp_order_relation,df_temp_rework_relation])
                 # Create relation visualization
                 array_for_drawing = list(df_temp_order_relation.itertuples(index=False, name=None))
                 graph = nx.DiGraph()

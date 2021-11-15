@@ -467,7 +467,10 @@ class rework():
                 df_henstandsprøver = rework.get_rework_henstandsprøver(startdato, slutdato, silo, ordrenummer)
                 # Concat each function to one dataframe
                 df_rework = pd.concat([df_rework, df_prøvesmagning, df_pakkeri, df_komprimatorrum, df_henstandsprøver])
-        return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
+        if len(df_rework) == 0:
+            return pd.DataFrame()
+        else:
+            return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
     
 class finished_goods():
     # Recursive query to get lotnumbers related to any of the input orders.

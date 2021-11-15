@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-from datetime import datetime
 import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
@@ -15,7 +14,6 @@ def initiate_report(initiate_id):
     con_ds = ssf.get_connection('bki_datastore')
     cursor_ds = ssf.get_cursor('bki_datastore')
     engine_ds = ssf.get_engine('bki_datastore')
-    con_nav = ssf.get_connection('navision')
     con_probat = ssf.get_connection('probat')
 
     # =============================================================================
@@ -41,7 +39,6 @@ def initiate_report(initiate_id):
     req_dato = df_request.loc[0, 'Dato']
     req_ordrelationstype = df_request.loc[0, 'Ordrerelationstype']
     script_name = 'Sporbarhed_opspræt.py'
-    timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
     df_sections = ssf.get_ds_reporttype(req_id)
     # Formated date strings relevant for silos
     silo_req_date_dmy = req_dato.strftime('%d-%m-%Y')
@@ -71,7 +68,7 @@ def initiate_report(initiate_id):
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
     cursor_ds.commit()
-    # ssf.log_insert(script_name, f'Request id: {req_id} initiated')
+    ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Section 1: Generelt
@@ -206,7 +203,7 @@ def initiate_report(initiate_id):
 
     # Get order numbers for finished goods from Probat and Navision
     query_probat_order_relations = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
-                                        ,[S_ORDER_NAME] AS ['Relateret ordre']
+                                        ,[S_ORDER_NAME] AS [Relateret ordre]
                                         ,'Probat PG' AS [Kilde]
                                         FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
                                         WHERE [ORDER_NAME] <> ''
@@ -352,6 +349,68 @@ def initiate_report(initiate_id):
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_massebalance))
 
+
+    # =============================================================================
+    # Section 2: Relaterede ordrer
+    # =============================================================================
+    section_id = 2
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Ordrenummer','Varenummer','Navn','Relateret ordre',
+                    'Relateret vare','Relateret navn','Kilde']
+
+    if req_ordrelationstype == 0: # All relations
+        df_temp_orders = pd.concat([df_nav_order_relations,df_probat_order_relations])
+    elif req_ordrelationstype == 1: # Only Probat
+        df_temp_orders = df_probat_order_relations
+    elif req_ordrelationstype == 2: # Only Navision
+        df_temp_orders = df_nav_order_relations
+
+    if ssf.get_section_status_code(df_temp_orders) == 99:
+        try:
+            df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: ssf.get_nav_order_info(x))
+            df_temp_orders['Navn'] = df_temp_orders['Varenummer'].apply(lambda x: ssf.get_nav_item_info(x, 'Beskrivelse'))
+            df_temp_orders['Relateret vare'] = df_temp_orders['Relateret ordre'].apply(lambda x: ssf.get_nav_order_info(x))
+            df_temp_orders['Relateret navn'] = df_temp_orders['Relateret vare'].apply(lambda x: ssf.get_nav_item_info(x, 'Beskrivelse'))
+            # Remove orders not existing in NAV and sort columns and rows
+            df_temp_orders = df_temp_orders[column_order]
+            df_temp_orders.sort_values(by=['Ordrenummer','Relateret ordre'], inplace=True)
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_temp_orders, section_name, False)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+    # =================================================================
+    # Section 19: Relation visualization
+    # =================================================================
+            #Try to create .png with relations illustrated
+            try:
+                df_temp_order_relation = df_temp_orders[['Ordrenummer','Varenummer','Relateret ordre','Relateret vare']]
+                df_temp_order_relation['Ordretype'] = df_temp_order_relation['Varenummer'].apply(lambda x: ssf.get_nav_item_info(x, 'Varetype'))
+                df_temp_order_relation['Relateret ordretype'] = df_temp_order_relation['Relateret vare'].apply(lambda x: ssf.get_nav_item_info(x, 'Varetype'))
+                df_temp_order_relation['Primær'] = df_temp_order_relation['Ordretype'] + '\n' + df_temp_order_relation['Ordrenummer']
+                df_temp_order_relation['Sekundær'] = df_temp_order_relation['Relateret ordretype'] + '\n' + df_temp_order_relation['Relateret ordre']
+                df_temp_order_relation = df_temp_order_relation[['Primær','Sekundær']]
+                # Prepare and add source of rework to main plot
+                df_temp_rework_relation = df_rework_used
+                df_temp_rework_relation['Primær'] = 'Rework kilde\n' + df_temp_rework_relation['Kilde']
+                df_temp_rework_relation['Sekundær'] = df_temp_rework_relation['Produktionsordre']
+                df_temp_rework_relation = df_temp_rework_relation[['Primær','Sekundær']]
+                df_temp_order_relation = pd.concat([df_temp_order_relation,df_temp_rework_relation])
+                # Create relation visualization
+                array_for_drawing = list(df_temp_order_relation.itertuples(index=False, name=None))
+                graph = nx.DiGraph()
+                graph.add_edges_from(array_for_drawing)
+                relations_plot = nx.drawing.nx_pydot.to_pydot(graph)
+                relations_plot.write_png(path_png_relations)
+                # Write to log
+                ssf.section_log_insert(req_id, 19, 0)
+            except Exception as e: # Insert error into log. Same section_id as others..
+                ssf.section_log_insert(req_id, 19, 2, e)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_orders))
+
+
     # =============================================================================
     # Section 18: Sektionslog
     # =============================================================================
@@ -376,7 +435,7 @@ def initiate_report(initiate_id):
 
     # Save file
     excel_writer.save()
-    # ssf.log_insert(script_name, f'Excel file {file_name} created')
+    ssf.log_insert(script_name, f'Excel file {file_name} created')
 
     # =============================================================================
     # Write into email log
@@ -387,8 +446,8 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    # pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
-    # ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed

@@ -24,7 +24,7 @@ df_request = pd.read_sql(query_ds_request, con_ds)
 
 # Exit script if no request data is found
 if len(df_request) == 0:
-    raise SystemExit(0)
+    quit()
 
 # =============================================================================
 # Set request variables
@@ -41,7 +41,8 @@ if req_type == 0:
 elif req_type == 1:
     Sporbarhed_råkaffe.initiate_report(req_id)
 elif req_type == 2:
-    Sporbarhed_opspræt.initiate_report(req_id)
+    pass
+    # Sporbarhed_opspræt.initiate_report(req_id)
 
 # Exit script
-raise SystemExit(0)
+quit()

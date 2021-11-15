@@ -17,7 +17,7 @@ def initiate_report(initiate_id):
     engine_ds = ssf.get_engine('bki_datastore')
     con_nav = ssf.get_connection('navision')
     con_probat = ssf.get_connection('probat')
-    
+
     # =============================================================================
     # Read data from request
     # =============================================================================
@@ -26,11 +26,10 @@ def initiate_report(initiate_id):
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
     df_request = pd.read_sql(query_ds_request, con_ds)
-    
+
     # Exit script if no request data is found
-    if len(df_request) == 0:
-        raise SystemExit(0)
-    
+    ssf.get_exit_check(len(df_request))
+
     # =============================================================================
     # Set request variables
     # =============================================================================
@@ -51,20 +50,20 @@ def initiate_report(initiate_id):
     silo_next_empty_ymd = ssf.rework.get_silo_next_empty(req_reference_no, silo_req_date_ymd)
     # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
     df_sections = ssf.get_ds_reporttype(req_type)
- 
+
     # =============================================================================
     # Variables for files generated
     # =============================================================================
     filepath = ssf.get_filepath('report')
     file_name = f'Rapport_{req_reference_no}_{req_id}'
-    
+
     wb_name = f'{file_name}.xlsx'
     path_file_wb = filepath + r'\\' + wb_name
     excel_writer = pd.ExcelWriter(path_file_wb, engine='xlsxwriter')
-    
+
     png_relations_name = f'{file_name}.png'
     path_png_relations = filepath + r'\\' + png_relations_name
-    
+
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
@@ -72,16 +71,16 @@ def initiate_report(initiate_id):
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
     cursor_ds.commit()
-    ssf.log_insert(script_name, f'Request id: {req_id} initiated')
+    # ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
-        # =============================================================================
+    # =============================================================================
     # Section 1: Generelt
     # =============================================================================
     section_id = 1
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Silo', 'Anmodet dato', 'Sidste tommelding'
                     ,'Efterfølgende tommelding', 'Reworktype']
-    
+
     df_generelt = df_request
     if ssf.get_section_status_code(df_generelt) == 99:
         try:
@@ -103,29 +102,52 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else:
         # Write into log if no data is found or section is out of scope
-        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_generelt))                   
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_generelt))
 
     # =============================================================================
     # Section 9: Rework anvendt
     # =============================================================================
     section_id = 9
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = []    
-    
-    
-    
-    
+    column_order = ['Produktionsordre','Indhold','Indhold varenummer',
+                    'Indhold varenavn','Kilde']
+
+    # Dataframe containing any grinding orders that have used rework - also used in section 23..
+    df_rework_used_in = ssf.rework.get_rework_orders_from_dates(req_reference_no, silo_last_empty_ymd, silo_next_empty_ymd)
+    # Create dataframe to query for all contents of rework silos using function
+    df_rework_used = df_rework_used_in
+    df_rework_used['Startdato'] = silo_last_empty_ymd
+    df_rework_used['Slutdato'] = df_rework_used['Dato']
+    df_rework_used['Silo'] = req_reference_no
+    df_rework_used['Produktionsordre'] = df_rework_used['Ordrenummer']
+    # Alter dataframe to contain results from function
+    df_rework_used = ssf.rework.get_rework_total(df_rework_used)
+
+    if ssf.get_section_status_code(df_rework_used) == 99:
+        try:
+            df_rework_used['Indhold varenummer'] = df_rework_used['Produktionsordre'].apply(lambda x: ssf.get_nav_order_info(x))
+            df_rework_used['Indhold varenavn'] = df_rework_used['Indhold varenummer'].apply(lambda x: ssf.get_nav_item_info(x, 'Beskrivelse'))
+            df_rework_used = df_rework_used[column_order]
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used, section_name, True)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        # Insert error into log
+        except Exception as e:
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else:
+        # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework_used))
+
     # =============================================================================
-    # Section 23: Rework indgår i     
+    # Section 23: Rework indgår i
     # =============================================================================
     section_id = 23
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Dato','Ordrenummer','Varenummer','Varenavn','Kilo']
     columns_1_dec = ['Kilo']
     columns_strip = ['Dato']
-    
-    df_rework_used_in = ssf.rework.get_rework_orders_from_dates(req_reference_no, silo_last_empty_ymd, silo_next_empty_ymd)
-    
+
     if ssf.get_section_status_code(df_rework_used_in) == 99:
         try:
             # String of order numbers used for SQL query
@@ -142,7 +164,7 @@ def initiate_report(initiate_id):
                                    FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                                    WHERE [ORDER_NAME] IN ({rework_orders})
                                    GROUP BY [ORDER_NAME] """
-            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)  
+            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
             # Join to input
             df_rework_used_in = pd.merge(df_rework_used_in,
                                          df_probat_grinding_output,
@@ -171,7 +193,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else:
         # Write into log if no data is found or section is out of scope
-        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework_used_in))    
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_rework_used_in))
 
     # =============================================================================
     # Section 3: Færdigvaretilgang
@@ -181,9 +203,9 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
     columns_strip = ['Ordrenummer']
-    
+
     # Get order numbers for finished goods from Probat and Navision
-    query_probat_order_relations = f""" SELECT [ORDER_NAME] AS [Ordrenummer] 
+    query_probat_order_relations = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
                                         ,[S_ORDER_NAME] AS ['Relateret ordre']
                                         ,'Probat PG' AS [Kilde]
                                         FROM [dbo].[PRO_EXP_ORDER_SEND_PG]
@@ -193,7 +215,7 @@ def initiate_report(initiate_id):
     df_probat_order_relations = pd.read_sql(query_probat_order_relations, con_probat)
     df_nav_order_relations = ssf.get_nav_orders_from_related_orders(rework_orders)
     # Concat lists and convert list of orders to string used for sql
-    order_numbers_fg_sql = ssf.extend_order_list(req_ordrelationstype, [], 
+    order_numbers_fg_sql = ssf.extend_order_list(req_ordrelationstype, [],
                                                df_probat_order_relations['Ordrenummer'].unique().tolist(),
                                                df_nav_order_relations['Ordrenummer'].unique().tolist())
     order_numbers_fg_sql = ssf.string_to_sql(order_numbers_fg_sql)
@@ -221,7 +243,7 @@ def initiate_report(initiate_id):
                                      'Restlager': df_nav_færdigvaretilgang['Restlager'].sum(),
                                      'Regulering & ompak': df_nav_færdigvaretilgang['Regulering & ompak'].sum()
                                      }
-            df_nav_færdigvaretilgang = pd.concat([df_nav_færdigvaretilgang, 
+            df_nav_færdigvaretilgang = pd.concat([df_nav_færdigvaretilgang,
                                                   pd.DataFrame(dict_færdigvare_total, index=[0])])
             df_nav_færdigvaretilgang = df_nav_færdigvaretilgang[column_order]
             df_nav_færdigvaretilgang.sort_values(by=['Varenummer'], inplace=True)
@@ -246,9 +268,9 @@ def initiate_report(initiate_id):
                         'Enheder','Kilo']
     columns_1_dec = ['Enheder','Kilo']
     columns_strip = ['Produktionsordrenummer']
-    
+
     df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots)
-    
+
     if ssf.get_section_status_code(df_nav_debitorer) == 99:
         try:
             # Concat Order nos to one string
@@ -282,7 +304,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_nav_debitorer))
-    
+
     # =============================================================================
     # Section 8: Massebalance
     # =============================================================================
@@ -354,7 +376,7 @@ def initiate_report(initiate_id):
 
     # Save file
     excel_writer.save()
-    ssf.log_insert(script_name, f'Excel file {file_name} created')
+    # ssf.log_insert(script_name, f'Excel file {file_name} created')
 
     # =============================================================================
     # Write into email log
@@ -365,8 +387,8 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
-    ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
+    # pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    # ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
@@ -378,4 +400,4 @@ def initiate_report(initiate_id):
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script
-    raise SystemExit(0)
+    ssf.get_exit_check(0)

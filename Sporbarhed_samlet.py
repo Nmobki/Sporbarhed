@@ -23,8 +23,7 @@ query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtage
 df_request = pd.read_sql(query_ds_request, con_ds)
 
 # Exit script if no request data is found
-if len(df_request) == 0:
-    quit()
+ssf.get_exit_check(len(df_request))
 
 # =============================================================================
 # Set request variables
@@ -45,4 +44,4 @@ elif req_type == 2:
     # Sporbarhed_opspræt.initiate_report(req_id)
 
 # Exit script
-quit()
+ssf.get_exit_check(0)

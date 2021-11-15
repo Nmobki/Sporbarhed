@@ -28,7 +28,7 @@ def initiate_report(initiate_id):
 
     # Exit script if no request data is found
     if len(df_request) == 0:
-        raise SystemExit(0)
+        quit()
 
     # =============================================================================
     # Set request variables
@@ -943,4 +943,4 @@ def initiate_report(initiate_id):
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script
-    raise SystemExit(0)
+    quit()

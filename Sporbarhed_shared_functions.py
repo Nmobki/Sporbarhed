@@ -4,6 +4,7 @@
 import pandas as pd
 import Sporbarhed_shared_server_information as sssi
 from datetime import datetime
+import sys
 
 
 # =============================================================================
@@ -45,6 +46,13 @@ def get_engine(connection):
     dictionary = {
         'bki_datastore': sssi.engine_ds }
     return dictionary[connection]
+
+# Check if script is supposed to exit. 0 value = exit
+def get_exit_check(value):
+    if value == 0:
+        sys.exit()
+    else:
+        pass
 
 # Read section names
 def get_ds_reporttype(request_type):

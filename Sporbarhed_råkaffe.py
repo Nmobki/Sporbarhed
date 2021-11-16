@@ -341,7 +341,7 @@ def initiate_report(initiate_id):
 
     # Join previous found orders to one list for query below
     sql_related_orders = ssf.string_to_sql(roast_orders + grinder_orders)
-    
+
     # Get related orders from Navision
     df_nav_order_related = ssf.get_nav_orders_from_related_orders(sql_related_orders)
 
@@ -785,7 +785,7 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_massebalance))
-      
+
     # =============================================================================
     # Section 2: Relaterede ordrer Kontrakt --> færdigvare
     # =============================================================================

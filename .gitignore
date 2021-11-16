@@ -5,3 +5,5 @@ __pycache__/Sporbarhed_færdigkaffe.cpython-37.pyc
 Tests.py
 *.pyc
 *.stats
+test sankey.py
+Sporbarhed_shared_server_information.py

@@ -297,7 +297,7 @@ def initiate_report(initiate_id):
     # Create list dependent on request relationsship type, defined when report is requested by user
     orders_top_level = ssf.extend_order_list(req_ordrelationstype, orders_top_level, probat_orders_top, nav_orders_top)
     orders_related = ssf.extend_order_list(req_ordrelationstype, orders_related, probat_orders_related, nav_orders_related)
-    
+
     # String used for querying Navision, only finished goods
     req_orders_total = ssf.string_to_sql(orders_top_level)
     # String used for querying Probat for relation between grinder and roaster for visualization

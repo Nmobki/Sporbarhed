@@ -95,7 +95,7 @@ def get_section_name(section: int, dataframe) -> str:
         Pandas dataframe containing information about section ids and names.
         Dataframe can be obtained using function get_ds_reporttype.
         Dataframe id column must be named 'Sektion', name column 'Sektion navn'
-    \nReturns
+    \n Returns
     -------
     String containing name of section.
     If name of section contains more than 31 characters 'Sektion [id]' is returned instead.
@@ -151,7 +151,7 @@ def extend_order_list(relationship_type: int, original_list: list, probat_list: 
 def section_log_insert(request_id: int, section: int, statuscode: int, errorcode=None):
     """
     Writes into BKI_Datastore trc.section_log. \n
-    Parameters
+    \n Parameters
     ----------
     request_id : int
         Id of the requested being procesed in script calling function.
@@ -173,7 +173,7 @@ def section_log_insert(request_id: int, section: int, statuscode: int, errorcode
 def insert_dataframe_into_excel (engine, dataframe, sheetname: str, include_index: bool):
     """
     Inserts a dataframe into an Excel sheet
-    \nParameters
+    \n Parameters
     ----------
     engine : Excel engine
     dataframe : Pandas dataframe
@@ -190,7 +190,7 @@ def string_to_sql(list_with_values: list) -> str:
     """
     Convert list of values into a single string which can be used for SQL queries IN clauses.
     Input ['a','b','c'] --> Output 'a','b','c'
-    \nParameters
+    \n Parameters
     ----------
     list_with_values : list
         List containing all values which need to be joined into one string
@@ -348,7 +348,7 @@ class rework():
                      WHERE [SILO] = '{silo}'
                      AND DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) < '{date}' """
         df = pd.read_sql(query, con_probat)
-        if len(df) == 0 or df['Dato'].iloc[0] == None:
+        if len(df) == 0 or df['Dato'].iloc[0] is None:
             return None
         else:
             df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
@@ -364,7 +364,7 @@ class rework():
                      WHERE [SILO] = '{silo}'
                      AND DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) > '{date}' """
         df = pd.read_sql(query, con_probat)
-        if len(df) == 0 or df['Dato'].iloc[0] == None:
+        if len(df) == 0 or df['Dato'].iloc[0] is None:
             return None
         else:
             df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))

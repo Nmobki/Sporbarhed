@@ -443,7 +443,8 @@ class rework():
                     GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                     ,[SOURCE] ,[ORDER_NAME] """
         df = pd.read_sql(query, con_probat)
-        df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
+        df['Temp_date'] = df['Slutdato'].dt.strftime('%Y-%m-%d')
+        df['Startdato'] = df.apply(lambda x: rework.get_silo_last_empty(x.Silo, x.Temp_date), axis=1)
         return df
 
     # Get rework registrered in prøvesmagning in BKI_Datastore

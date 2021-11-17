@@ -126,7 +126,7 @@ def initiate_report(initiate_id):
             df_rework_used['Indhold varenavn'] = df_rework_used['Indhold varenummer'].apply(lambda x: ssf.get_nav_item_info(x, 'Beskrivelse'))
             df_rework_used = df_rework_used[column_order]
             # Write results to Excel
-            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used, section_name, True)
+            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used, section_name, False)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         # Insert error into log
@@ -182,7 +182,7 @@ def initiate_report(initiate_id):
                 df_rework_used_in[col] = df_rework_used_in[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             df_rework_used_in = df_rework_used_in[column_order]
             # Write results to Excel
-            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used_in, section_name, True)
+            ssf.insert_dataframe_into_excel(excel_writer, df_rework_used_in, section_name, False)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         # Insert error into log
@@ -341,7 +341,7 @@ def initiate_report(initiate_id):
     if ssf.get_section_status_code(df_massebalance) == 99:
         try:
             # Write results to Excel
-            ssf.insert_dataframe_into_excel(excel_writer, df_massebalance, section_name, True)
+            ssf.insert_dataframe_into_excel(excel_writer, df_massebalance, section_name, False)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log

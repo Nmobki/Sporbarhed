@@ -21,7 +21,8 @@ con_probat = sssi.con_probat
 # =============================================================================
 
 # Get connection information from sssi
-def get_connection(connection):
+def get_connection(connection: str):
+    """Returns connection string for requested database"""
     dictionary = {
         'navision': sssi.con_nav
         ,'comscale': sssi.con_comscale
@@ -30,32 +31,37 @@ def get_connection(connection):
     return dictionary[connection]
 
 # Get cursor
-def get_cursor(connection):
+def get_cursor(connection: str):
+    """Returns cursor for requested database"""
     dictionary = {
         'bki_datastore': sssi.cursor_ds }
     return dictionary[connection]
 
 # Get filepath
-def get_filepath(type):
+def get_filepath(path_type: str):
+    """Returns filepath for requested type"""
     dictionary = {
         'report': sssi.report_filepath}
-    return dictionary[type]
+    return dictionary[path_type]
 
 # Get engines for connections
-def get_engine(connection):
+def get_engine(connection: str):
+    """Returns engine for requested database"""
     dictionary = {
         'bki_datastore': sssi.engine_ds }
     return dictionary[connection]
 
 # Check if script is supposed to exit. 0 value = exit
-def get_exit_check(value):
+def get_exit_check(value: int):
+    """Calls sys.exit() if input value == 0"""
     if value == 0:
         sys.exit()
     else:
         pass
 
 # Read section names
-def get_ds_reporttype(request_type):
+def get_ds_reporttype(request_type: int):
+    """Returns pandas dataframe with section id and name for requested reporttype"""
     query =  f"""SELECT SRS.[Sektion], SS.[Beskrivelse] AS [Sektion navn]
                        FROM [trc].[Sporbarhed_rapport_sektion] AS SRS
 					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
@@ -64,7 +70,9 @@ def get_ds_reporttype(request_type):
     return pd.read_sql(query, con_ds)
 
 # Get information from section log
-def get_ds_section_log(request_id):
+def get_ds_section_log(request_id: int):
+    """Returns pandas dataframe with info from BKI_Datastore section log
+       For the requested request_id"""
     query = f""" SELECT	SL.[Sektion] AS [Sektionskode],S.[Beskrivelse] AS [Sektion]
                 ,SS.[Beskrivelse] AS [Status]
                 ,SL.[Fejlkode_script] AS [Fejlkode script], SL.[Registreringstidspunkt]
@@ -77,7 +85,21 @@ def get_ds_section_log(request_id):
     return pd.read_sql(query, con_ds)
 
 # Get section name for section from query
-def get_section_name(section, dataframe):
+def get_section_name(section: int, dataframe) -> str:
+    """
+    Parameters
+    ----------
+    section : Int
+        Id of the requested section.
+    dataframe : Pandas dataframe
+        Pandas dataframe containing information about section ids and names.
+        Dataframe can be obtained using function get_ds_reporttype.
+        Dataframe id column must be named 'Sektion', name column 'Sektion navn'
+    \nReturns
+    -------
+    String containing name of section.
+    If name of section contains more than 31 characters 'Sektion [id]' is returned instead.
+    """
     df_temp_sections = dataframe.loc[dataframe['Sektion'] == section]
     x = df_temp_sections['Sektion navn'].iloc[0]
     if len(x) == 0 or len(x) > 31:
@@ -86,7 +108,9 @@ def get_section_name(section, dataframe):
         return x
 
 # Find statuscode for section log
-def get_section_status_code(dataframe):
+def get_section_status_code(dataframe) -> int:
+    """ input parameter == Pandas dataframe \n
+        Returns 99 if dataframe contains data, otherwise return  == 1"""
     if len(dataframe) == 0:
         return 1 # Empty dataframe
     else:
@@ -94,7 +118,25 @@ def get_section_status_code(dataframe):
 
 # Concatenate and extend list of orders based on chosen traceability type
 # 0 = all | 1 = just Probat | 2 = just Navision
-def extend_order_list(relationship_type, original_list, probat_list, navision_list):
+def extend_order_list(relationship_type: int, original_list: list, probat_list: list, navision_list : list) -> list:
+    """
+    Extends list of orders with any new orders from additional lists depending on relationship_type requested
+    \n Parameters
+    ----------
+    relationship_type : int
+        Values 0-2. Defines whether list should contain only Probat or Navision orders or both.
+        0 = all | 1 = just Probat | 2 = just Navision
+    original_list : list
+        Input list that needs to be extended.
+    probat_list : list
+        List containing Probat orders.
+    navision_list : list
+        List containing Navision orders.
+    \n Returns
+    -------
+    original_list : list
+        Returns original list extended with new orders from Probat and Navision lists depending on input relationship type.
+    """
     dictionary = {
         0: navision_list + probat_list
         ,1: probat_list
@@ -106,7 +148,20 @@ def extend_order_list(relationship_type, original_list, probat_list, navision_li
     return original_list
 
 # Write into section log
-def section_log_insert(request_id, section, statuscode, errorcode=None):
+def section_log_insert(request_id: int, section: int, statuscode: int, errorcode=None):
+    """
+    Writes into BKI_Datastore trc.section_log. \n
+    Parameters
+    ----------
+    request_id : int
+        Id of the requested being procesed in script calling function.
+    section : int
+        Section id being processed.
+    statuscode : int
+        Failure, success, no data etc..
+    errorcode : str, optional
+        Optional parameter to log any errorcodes returned by Python. The default is None.
+    """
     df = pd.DataFrame(data={'Forespørgsels_id':request_id,
                             'Sektion':section,
                             'Statuskode':statuscode,
@@ -115,17 +170,44 @@ def section_log_insert(request_id, section, statuscode, errorcode=None):
     df.to_sql('Sporbarhed_sektion_log', con=engine_ds, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
-def insert_dataframe_into_excel (engine, dataframe, sheetname, include_index):
+def insert_dataframe_into_excel (engine, dataframe, sheetname: str, include_index: bool):
+    """
+    Inserts a dataframe into an Excel sheet
+    \nParameters
+    ----------
+    engine : Excel engine
+    dataframe : Pandas dataframe
+        Dataframe containing data supposed to be inserted into the Excel workbook.
+    sheetname : str (max length 31 characters)
+        Name of sheet created where dataframe will be inserted into.
+    include_index : bool
+        True if index is supposed to be included in insert into Excel, False if not.
+    """
     dataframe.to_excel(engine, sheet_name=sheetname, index=include_index)
 
 # Convert list into string for SQL IN operator
-def string_to_sql(list_with_values):
+def string_to_sql(list_with_values: list) -> str:
+    """
+    Convert list of values into a single string which can be used for SQL queries IN clauses.
+    Input ['a','b','c'] --> Output 'a','b','c'
+    \nParameters
+    ----------
+    list_with_values : list
+        List containing all values which need to be joined into one string
+
+    \n Returns
+    -------
+    String with comma separated values.
+    Returned values are encased in '' when returned.
+    """
     if len(list_with_values) == 0:
         return ''
     else:
         return "'{}'".format("','".join(list_with_values))
 
-def number_format(value, number_type):
+def number_format(value, number_type: str) -> str:
+    """Converts an input number to a danish formated number.
+       Number is returned as a string."""
     try:
         if number_type == 'dec_2':
             return f'{round(value,2):,}'.replace(',', ';').replace('.', ',').replace(';', '.')
@@ -143,27 +225,26 @@ def number_format(value, number_type):
         return value
 
 # Prevent division by zero error
-def zero_division(nominator, denominator, zero_return):
+def zero_division(nominator, denominator, zero_return: str):
+    """ To be used on division to prevent division by zero error.
+        zero_return is used to defined whether a 0 or None is desired to be returned incase of a zero value denominator."""
     dictionary = {'None':None,'Zero':0}
     if denominator in [0,None]:
         return dictionary[zero_return]
     else:
         return nominator / denominator
 
-# Convert placeholder values from dataframe to empty string for Word document
-def convert_placeholders_word(string):
-    if string in ['None','nan','NaT']:
-        return ''
-    else:
-        return string
-
 # Strip comma from commaseparated strings
-def strip_comma_from_string(text):
+def strip_comma_from_string(text: str) -> str:
+    """ Strips input string of any commas if they are left- or rightmost character in the string."""
     text = text.rstrip(',')
-    return text.lstrip(',')
+    text = text.lstrip(',')
+    return text
 
 # Convert dates between formats
-def convert_date_format(date, existing_format, new_format):
+def convert_date_format(date, existing_format: str, new_format: str):
+    """ Convert a date from one format to another.
+        Currently conversion between 'yyyy-mm-dd' and 'dd-mm-yyyy' is possible."""
     if date is None:
         new_date = None
     elif existing_format == 'yyyy-mm-dd' and new_format == 'dd-mm-yyyy':
@@ -173,7 +254,8 @@ def convert_date_format(date, existing_format, new_format):
     return new_date
 
 # Write into dbo.log
-def log_insert(event, note):
+def log_insert(event: str, note: str):
+    """Inserts a record into BKI_Datastore dbo.log with event and note."""
     dict_log = {'Note': note
                 ,'Event': event}
     pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_ds, schema='dbo', if_exists='append', index=False)
@@ -191,7 +273,8 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
-def get_nav_item_info(item_no, field):
+def get_nav_item_info(item_no: str, field: str) -> str:
+    """Returns information for the requested item number and field from Navision. """
     if item_no in df_nav_items['Nummer'].tolist():
         df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
         return df_temp[field].iloc[0]
@@ -218,15 +301,18 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
 df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
 
 # Get item number for requested order number
-def get_nav_order_info(order_no):
+def get_nav_order_info(order_no: str) -> str:
+    """Returns item number for the requested production order based on Navision."""
     if order_no in df_nav_order_info['Ordrenummer'].tolist():
         df_temp = df_nav_order_info[df_nav_order_info['Ordrenummer'] == order_no]
         return df_temp['Varenummer'].iloc[0]
     else:
         return None
 
-# Get dataframe with 
-def get_nav_orders_from_related_orders(orders):
+# Get dataframe with
+def get_nav_orders_from_related_orders(orders: str):
+    """Returns a Pandas Dataframe with a list of orders related to input orders.
+       Returned dataframe is based on Navision -> Reserved production orders."""
     query = f""" SELECT [Prod_ Order No_] AS [Ordrenummer]
                                ,[Reserved Prod_ Order No_] AS [Relateret ordre]
                                ,'Navision reservationer' AS [Kilde]
@@ -236,7 +322,8 @@ def get_nav_orders_from_related_orders(orders):
     return pd.read_sql(query, con_nav)
 
 # Get subject for emails depending on request type
-def get_email_subject(request_reference, request_type):
+def get_email_subject(request_reference: str, request_type: int) -> str:
+    """Returns a string with subject for email."""
     dict_email_subject = {
         0: f'Anmodet rapport for ordre {request_reference}'
         ,1: f'Anmodet rapport for parti {request_reference}'
@@ -252,7 +339,10 @@ def get_email_subject(request_reference, request_type):
 
 class rework():
     # Get last empty signal from a given silo before requested date
-    def get_silo_last_empty(silo, date):
+    def get_silo_last_empty(silo: str, date: str):
+        """Returns date containing date for last emptying of the requested silo.
+           Date is to be formated 'yyyy-mm-dd'.
+           If no date is found None is returned."""
         query = f""" SELECT	MAX(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
                      WHERE [SILO] = '{silo}'
@@ -263,9 +353,12 @@ class rework():
         else:
             df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
             return str(df['Dato'].iloc[0])
-    
+
     # Get the first empty signal from a given silo after the requested date
-    def get_silo_next_empty(silo, date):
+    def get_silo_next_empty(silo: str, date: str):
+        """Returns date containing date for next emptying of the requested silo.
+           Date is to be formated 'yyyy-mm-dd'.
+           If no date is found None is returned."""
         query = f""" SELECT	MIN(DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)) AS [Dato]
                      FROM [dbo].[PRO_EXP_SILO_DIF]
                      WHERE [SILO] = '{silo}'
@@ -276,17 +369,36 @@ class rework():
         else:
             df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
         return str(df['Dato'].iloc[0])
-    
+
     # Get the type of rework from the silo
-    def get_rework_type(silo):
+    def get_rework_type(silo: str) -> str:
+        "Returns type of rework based on input silo."
         if silo in ['401','403']:
             rework_type = 'Helbønne'
         elif silo in ['511','512']:
             rework_type = 'Formalet'
         return rework_type
-    
+
     # Get grinding orders that have used rework from the requested silos between relevant dates
-    def get_rework_orders_from_dates(silo, start_date, end_date):
+    def get_rework_orders_from_dates(silo: str, start_date: str, end_date: str):
+        """
+        Get dataframe containing all grinding orders which have used rework from the specified
+        silo between the two input dates.
+        Data is fetched from Probat.
+        \n Parameters
+        ----------
+        silo : str
+            Silo from which rework has been used.
+        start_date : str
+            Start date for the period which is to be queried for.
+        end_date : str
+            End date for the period which is to be queried for.
+            If no end date is supplied todays date is used instead.
+        \n Returns
+        -------
+        df : Pandas dataframe
+            Returns a pandas dataframe with date and order numbers.
+        """
         if None in (silo, start_date):
             return None
         # Set end_date to todays date if input end_date is None
@@ -311,9 +423,13 @@ class rework():
                 GROUP BY  [Dato], [Ordrenummer] """
         df = pd.read_sql(query, con_probat)
         return df
-    
+
     # Get a dataframe containing all orders which have used rework silos as well as use dates
-    def get_rework_silos(orders_string):
+    def get_rework_silos(orders_string: str):
+        """Returns a pandas dataframe with all grinding orders that have used rework.
+           Returned dataframe is based on input string of order numbers, and only orders
+           which have used rework will be included in the returned dataframe.
+           Data is fetched from Probat."""
         query = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Slutdato]
                     ,[SOURCE_NAME] AS [Silo] ,[ORDER_NAME] AS [Produktionsordre]
                     FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
@@ -329,9 +445,27 @@ class rework():
         df = pd.read_sql(query, con_probat)
         df['Startdato'] = df['Silo'].apply((lambda x: rework.get_silo_last_empty(x, df['Slutdato'].strftime('%Y-%m-%d'))))
         return df
-    
+
     # Get rework registrered in prøvesmagning in BKI_Datastore
-    def get_rework_prøvesmagning(start_date, end_date, silo, order_no):
+    def get_rework_prøvesmagning(start_date: str, end_date: str, silo: str, order_no: str):
+        """
+        Get dataframe with all registrations regarding rework from prøvesmagning.
+        Data is fetched from BKI_Datastore cof.rework_registrering and cof.Rework_prøvesmagning
+        \n Parameters
+        ----------
+        start_date : str
+            Start date formated as 'yyyy-mm-dd'. Used to defined start of period for which data is searched.
+        end_date : str
+            End date formated as 'yyyy-mm-dd'. Used to defined end of period for which data is searched.
+        silo : str
+            Silo which the rework must have been added to.
+        order_no : str
+            Order_number which the request is based on.
+        \n Returns
+        -------
+        df_temp : Pandas Dataframe
+            Dataframe containing productionorders, silo, source and requested order number.
+        """
         if None in (start_date, end_date, silo, order_no):
             return None
         else:
@@ -351,9 +485,27 @@ class rework():
                 df_temp['Produktionsordre'] = order_no
                 df_temp['Kilde'] = 'Prøvesmagning'
                 return df_temp
-    
+
     # Fetch start dates from BKI_Datastore and use these to return a list of relevant orders from Navision containing order numbers.
     def get_rework_pakkeri(start_date, end_date, silo, order_no):
+        """
+        Get dataframe with all registrations regarding rework from pakkeri.
+        Data is fetched from BKI_Datastore cof.rework_registrering which is then used to filter final query from Navision Item Ledger Entry.
+        \n Parameters
+        ----------
+        start_date : str
+            Start date formated as 'yyyy-mm-dd'. Used to defined start of period for which data is searched.
+        end_date : str
+            End date formated as 'yyyy-mm-dd'. Used to defined end of period for which data is searched.
+        silo : str
+            Silo which the rework must have been added to.
+        order_no : str
+            Order_number which the request is based on.
+        \n Returns
+        -------
+        df_temp : Pandas Dataframe
+            Dataframe containing productionorders, silo, source and requested order number.
+        """
         if None in (start_date, end_date, silo, order_no):
             return None
         else:
@@ -395,9 +547,27 @@ class rework():
                 df_total['Produktionsordre'] = order_no
                 df_total['Kilde'] = 'Pakkeri'
                 return df_total
-    
+
     # Get order numbers registrered in komprimatorrum in BKI_Datastore
     def get_rework_komprimatorrum(start_date, end_date, silo, order_no):
+        """
+        Get dataframe with all registrations regarding rework from komprimatorrum.
+        Data is fetched from BKI_Datastore cof.rework_registrering and cof.Rework_prøvesmagning
+        \n Parameters
+        ----------
+        start_date : str
+            Start date formated as 'yyyy-mm-dd'. Used to defined start of period for which data is searched.
+        end_date : str
+            End date formated as 'yyyy-mm-dd'. Used to defined end of period for which data is searched.
+        silo : str
+            Silo which the rework must have been added to.
+        order_no : str
+            Order_number which the request is based on.
+        \n Returns
+        -------
+        df_temp : Pandas Dataframe
+            Dataframe containing productionorders, silo, source and requested order number.
+        """
         if None in (start_date, end_date, silo, order_no):
             return None
         else:
@@ -414,9 +584,27 @@ class rework():
                 df_ds['Produktionsordre'] = order_no
                 df_ds['Kilde'] = 'Komprimatorrum'
                 return df_ds
-    
+
     # Fetch start dates from BKI_Datastore and use these to return a list of relevant orders from Navision containing order numbers.
     def get_rework_henstandsprøver(start_date, end_date, silo, order_no):
+        """
+        Get dataframe with all registrations regarding rework from henstandsprøver.
+        Data is fetched from BKI_Datastore cof.rework_registrering which is then used to filter final query from Navision Item Ledger Entry.
+        \n Parameters
+        ----------
+        start_date : str
+            Start date formated as 'yyyy-mm-dd'. Used to defined start of period for which data is searched.
+        end_date : str
+            End date formated as 'yyyy-mm-dd'. Used to defined end of period for which data is searched.
+        silo : str
+            Silo which the rework must have been added to.
+        order_no : str
+            Order_number which the request is based on.
+        \n Returns
+        -------
+        df_temp : Pandas Dataframe
+            Dataframe containing productionorders, silo, source and requested order number.
+        """
         if None in (start_date, end_date, silo, order_no):
             return None
         else:
@@ -459,6 +647,19 @@ class rework():
 
     # Use previously defined functions to create one total dataframe containing all rework identified through various sources
     def get_rework_total(df_silos):
+        """
+        This accepts a Pandas Dataframe as input parameter.
+        This is used to call the following functions:
+            get_rework_prøvesmagning, get_rework_pakkeri, get_rework_komprimatorrum, get_rework_henstandsprøver
+        \n Parameters
+        ----------
+        df_silos : Pandas Dataframe
+            Dataframe must contain columns named: 'Startdato','Slutdato','Silo','Produktionsordre'.
+        \n Returns
+        -------
+        Pandas Dataframe['Produktionsordre','Silo','Indhold','Kilde']
+            Returns a Pandas Dataframe containing all identified components of rework possibly used in the orders contained in input dataframe.
+        """
         if len(df_silos) == 0:
             return pd.DataFrame()
         else:
@@ -479,10 +680,25 @@ class rework():
             return pd.DataFrame()
         else:
             return df_rework[['Produktionsordre','Silo','Indhold','Kilde']]
-    
+
 class finished_goods():
     # Recursive query to get lotnumbers related to any of the input orders.
-    def get_nav_lotnos_from_orders(orders_string, return_type):
+    def get_nav_lotnos_from_orders(orders_string: str, return_type: str):
+        """
+        Returns all relevant lotnumbers from Navision Item Ledger Entry that are related to input orders.
+        \n Parameters
+        ----------
+        orders_string : str
+            String ready for SQL querying containing all order numbers which are the base for identifying all relevant lotnumbers.
+        return_type : str
+            'dataframe' or 'string'.
+            Defined which type of data is returned from the function.
+
+        \n Returns
+        -------
+        Pandas Dataframe or a string
+            Depending on input parameter "return_type" either a dataframe or a string is returned with all identified lotnumbers..
+        """
         query = f""" WITH [LOT_ORG] AS ( SELECT [Lot No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Order No_] IN ({orders_string})
@@ -506,9 +722,20 @@ class finished_goods():
             return df
         elif return_type == 'string':
             return string_to_sql(df['Lot'].unique().tolist())
-    
+
     # Get information per Order no. based on string of requested lotnumbers.
-    def get_production_information(lotnumbers):
+    def get_production_information(lotnumbers: str):
+        """
+        Get information about the production of any amount of lotnumbers.
+        Data is from Navision Item Ledger Entry
+        \n Parameters
+        ----------
+        lotnumbers : str
+            String ready for SQL querying containing any amount of lotnumbers..
+        \n Returns
+        -------
+        Pandas Dataframe
+        """
         query = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
     							  WHERE [Entry Type] IN (6,9)
@@ -532,9 +759,20 @@ class finished_goods():
     							WHERE ILE.[Lot No_] IN ({lotnumbers})
                                 GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
         return pd.read_sql(query, con_nav)
-    
+
     # Get information about any sales to any customers based on input list of lotnumbers.
-    def get_sales_information(lotnumbers):
+    def get_sales_information(lotnumbers: str):
+        """
+        Get information about the sales of any amount of lotnumbers.
+        Data is from Navision Item Ledger Entry
+        \n Parameters
+        ----------
+        lotnumbers : str
+            String ready for SQL querying containing any amount of lotnumbers..
+        \n Returns
+        -------
+        Pandas Dataframe
+        """
         query = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Produktionsordrenummer]
                           FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
     					  WHERE [Entry Type] IN (6,9) 
@@ -556,8 +794,21 @@ class finished_goods():
     						AND ILE.[Lot No_] IN ({lotnumbers})
                           GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer] """
         return pd.read_sql(query, con_nav)
-    
-    def get_order_relationship(lotnumbers):
+
+    def get_order_relationship(lotnumbers: str):
+        """
+        Returns a dataframe containing information about any order and all related orders if the primary order has been used to created display items.
+        Data is from Navision Item Ledger Entry
+        \n Parameters
+        ----------
+        lotnumbers : str
+            String ready for SQL querying containing any amount of lotnumbers..
+        \n Returns
+        -------
+        Pandas Dataframe
+            Returns a pandas dataframe containing order numbers for the primary and secondary orders..
+
+        """
         query = f""" WITH [DOC_CONS] AS ( SELECT [Lot No_], [Document No_]
                                   FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK)
                                   WHERE [Entry Type] IN (5,8)
@@ -577,6 +828,5 @@ class finished_goods():
                                   WHERE DC.[Document No_] IS NOT NULL
     							  AND ILE.[Lot No_] IN ({lotnumbers})
                                   GROUP BY DO.[Document No_] ,DC.[Document No_] """
-        return pd.read_sql(query, con_nav)       
-        
+        return pd.read_sql(query, con_nav)
         

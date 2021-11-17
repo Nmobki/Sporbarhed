@@ -310,7 +310,10 @@ def initiate_report(initiate_id):
                                   WHERE [S_ORDER_NAME] <> 'REWORK ROAST'
                                 	AND [ORDER_NAME] IN ({req_orders_related})
                                   GROUP BY [ORDER_NAME],[S_ORDER_NAME] """
-    df_probat_lg_to_ulr = pd.read_sql(query_probat_lg_to_ulr, con_probat)
+    if len(req_orders_related) != 0:
+        df_probat_lg_to_ulr = pd.read_sql(query_probat_lg_to_ulr, con_probat)
+    else:
+        df_probat_lg_to_ulr = pd.DataFrame()
 
     # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
     nav_lotnots_total_sql_string = ssf.finished_goods.get_nav_lotnos_from_orders(req_orders_total, 'string')
@@ -502,7 +505,7 @@ def initiate_report(initiate_id):
     elif req_ordrelationstype == 2:
         df_temp_orders = pd.concat([df_nav_orders,df_nav_order_related
                                     ,df_probat_orders.loc[df_probat_orders['Kilde'] == 'Probat mølle']]) # Only Probat orders which are not related to finished goods
-    print(df_probat_orders)
+
     if ssf.get_section_status_code(df_temp_orders) == 99:
         try:
             df_temp_orders['Varenummer'] = df_temp_orders['Ordrenummer'].apply(lambda x: ssf.get_nav_order_info(x))
@@ -674,7 +677,7 @@ def initiate_report(initiate_id):
         except Exception as e: # Insert error into log
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_total))
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_ulr))
 
     # =============================================================================
     # Section 6: Råkaffeforbrug
@@ -705,7 +708,7 @@ def initiate_report(initiate_id):
         except Exception as e: # Insert error into log
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
-        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_total))
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_lr))
 
     # =============================================================================
     # Section 7: Debitorer
@@ -758,7 +761,11 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Produktionsordre','Silo',
                     'Indhold','Indhold varenummer','Indhold varenavn','Kilde']
     columns_strip = ['Kilde']
-    df_rework = ssf.rework.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
+    
+    if len(q_related_orders) != 0:
+        df_rework = ssf.rework.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
+    else:
+        df_rework = pd.DataFrame()
 
     if ssf.get_section_status_code(df_rework) == 99:
         try:

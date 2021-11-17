@@ -266,6 +266,7 @@ def initiate_report(initiate_id):
     					   ,'Probat mølle' AS [Kilde]
     					   FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
     					   WHERE [ORDER_NAME] IN (SELECT [Relateret ordre] FROM [CTE_ORDERS])
+                           AND [S_ORDER_NAME] <> 'REWORK ROAST'
     					   GROUP BY [S_ORDER_NAME],[ORDER_NAME] """
     df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
 
@@ -394,7 +395,8 @@ def initiate_report(initiate_id):
     # Find related roasting orders from any related grinding orders
     query_probat_lg = f""" SELECT [S_ORDER_NAME]
                            FROM [dbo].[PRO_EXP_ORDER_LOAD_G]
-                           WHERE [ORDER_NAME] IN ({q_related_orders})
+                           WHERE [ORDER_NAME] IN ({q_related_orders}) 
+                           AND [S_ORDER_NAME] <> 'REWORK ROAST'
                            GROUP BY	[S_ORDER_NAME] """
     df_probat_lg = pd.DataFrame(columns=['S_ORDER_NAME'])
     if len(q_related_orders) != 0:
@@ -761,7 +763,7 @@ def initiate_report(initiate_id):
     column_order = ['Varenummer','Varenavn','Produktionsordre','Silo',
                     'Indhold','Indhold varenummer','Indhold varenavn','Kilde']
     columns_strip = ['Kilde']
-    
+
     if len(q_related_orders) != 0:
         df_rework = ssf.rework.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
     else:

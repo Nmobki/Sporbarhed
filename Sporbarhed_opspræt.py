@@ -392,10 +392,13 @@ def initiate_report(initiate_id):
                 # Prepare and add source of rework to main plot. Only concat dataframes if secondary contains data
                 df_temp_rework_relation = df_rework_used
                 if len(df_temp_rework_relation) != 0:
-                    df_temp_rework_relation['Primær'] = 'Rework kilde\n' + df_temp_rework_relation['Kilde']
-                    df_temp_rework_relation['Sekundær'] = df_temp_rework_relation['Produktionsordre']
+                    df_temp_rework_relation['Primær'] = 'Formalet kaffe\n' + df_temp_rework_relation['Produktionsordre']
+                    df_temp_rework_relation['Sekundær'] = 'Rework kilde\n' + df_temp_rework_relation['Kilde']
                     df_temp_rework_relation = df_temp_rework_relation[['Primær','Sekundær']]
+                    df_temp_rework_relation.drop_duplicates(inplace=True)
+                    print(df_temp_rework_relation)
                     df_temp_order_relation = pd.concat([df_temp_order_relation,df_temp_rework_relation])
+                    print(df_temp_order_relation)
                 # Create relation visualization
                 array_for_drawing = list(df_temp_order_relation.itertuples(index=False, name=None))
                 graph = nx.DiGraph()

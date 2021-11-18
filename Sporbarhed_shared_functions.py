@@ -270,6 +270,7 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
 				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
 				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
 				  ELSE [Item Category Code] END AS [Varetype]
+				  ,CASE WHEN [Produktionskode] LIKE '%HB%' THEN 'Helbønne' ELSE 'Formalet' END AS [Kaffetype]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
@@ -349,7 +350,7 @@ class rework():
                      AND DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) < '{date}' """
         df = pd.read_sql(query, con_probat)
         if len(df) == 0 or df['Dato'].iloc[0] is None:
-            return None
+            return '2021-11-01'
         else:
             df['Dato'] = df['Dato'].apply(lambda x: x.strftime('%Y-%m-%d'))
             return str(df['Dato'].iloc[0])
@@ -443,6 +444,8 @@ class rework():
                     GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                     ,[SOURCE] ,[ORDER_NAME] """
         df = pd.read_sql(query, con_probat)
+        if len(df) == 0:
+            return pd.DataFrame(columns=['Slutdato','Silo','Produktionsordre','Startdato'])
         df['Temp_date'] = df['Slutdato'].dt.strftime('%Y-%m-%d')
         df['Startdato'] = df.apply(lambda x: rework.get_silo_last_empty(x.Silo, x.Temp_date), axis=1)
         return df
@@ -482,10 +485,17 @@ class rework():
             if len(df_temp) == 0:
                 return None
             else:
+                # Get nessecary info for filtering
+                df_temp['Varenummer'] = df_temp.apply(lambda x: get_nav_order_info(x.Indhold), axis=1)
+                df_temp['Kaffetype'] = df_temp.apply(lambda x: get_nav_item_info(x.Varenummer, 'Kaffetype'), axis=1)
+                df_temp['Kaffetype_silo'] = df_temp.apply(lambda x: rework.get_rework_type(silo), axis=1)
+                # Filter columns
+                df_temp.query('Kaffetype_silo == Kaffetype', inplace=True)
+                # Add last info and return relevant columns
                 df_temp['Silo'] = silo
                 df_temp['Produktionsordre'] = order_no
                 df_temp['Kilde'] = 'Prøvesmagning'
-                return df_temp
+                return df_temp[['Indhold','Silo','Produktionsordre','Kilde']]
 
     # Fetch start dates from BKI_Datastore and use these to return a list of relevant orders from Navision containing order numbers.
     def get_rework_pakkeri(start_date, end_date, silo, order_no):

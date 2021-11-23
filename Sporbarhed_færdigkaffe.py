@@ -844,6 +844,29 @@ def initiate_report(initiate_id):
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_massebalance))
 
     # =============================================================================
+    # Section 24: Silolag
+    # =============================================================================
+    section_id = 24
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Produktionsordre','Silo','Kontraktnummer','Modtagelse',
+                    'Foregående kontraktnummer','Foregående modtagelse',
+                    'Efterfølgende kontraktnummer','Efterfølgende modtagelse']
+    
+    df_silolag = ssf.silo_layers.get_200silo_layers_from_orders(q_related_orders)
+    
+    if ssf.get_section_status_code(df_silolag) == 99:
+        try:
+            df_silolag = df_silolag[column_order]
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_silolag, section_name, False)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_silolag))
+
+    # =============================================================================
     # Section 10: Vægtkontrol
     # =============================================================================
     section_id = 10

@@ -271,6 +271,8 @@ query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
 				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
 				  ELSE [Item Category Code] END AS [Varetype]
 				  ,CASE WHEN [Produktionskode] LIKE '%HB%' THEN 'Helbønne' ELSE 'Formalet' END AS [Kaffetype]
+				  ,[Base Unit of Measure] AS [Basisenhed]
+				  ,[Vendor No_] AS [Leverandørnummer]
                   FROM [dbo].[BKI foods a_s$Item] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
@@ -278,6 +280,19 @@ def get_nav_item_info(item_no: str, field: str) -> str:
     """Returns information for the requested item number and field from Navision. """
     if item_no in df_nav_items['Nummer'].tolist():
         df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]
+        return df_temp[field].iloc[0]
+    else:
+        return None
+
+# Get info from vendor table in Navision
+query_nav_vendor = """  SELECT [No_] AS [Nummer],[Name] AS [Navn]
+                  FROM [dbo].[BKI foods a_s$Vendor] """
+df_nav_vendor = pd.read_sql(query_nav_vendor, con_nav)
+
+def get_nav_vendor_info(no: str, field: str) -> str:
+    """Returns information for the requested vendor and field from Navision. """
+    if no in df_nav_vendor['Nummer'].tolist():
+        df_temp = df_nav_vendor[df_nav_vendor['Nummer'] == no]
         return df_temp[field].iloc[0]
     else:
         return None
@@ -330,6 +345,9 @@ def get_email_subject(request_reference: str, request_type: int) -> str:
         ,1: f'Anmodet rapport for parti {request_reference}'
         ,2: 'Anmodet rapport for opspræt'
         ,3: f'Anmodet rapport for handelsvare {request_reference}'
+        ,4: f'Anmodet rapport for folie {request_reference}'
+        ,5: f'Anmodet rapport for karton {request_reference}'
+        ,6: f'Anmodet rapport for ventil {request_reference}'
     }
     return str(dict_email_subject[request_type])
 

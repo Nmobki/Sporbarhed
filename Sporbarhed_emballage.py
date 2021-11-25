@@ -131,7 +131,7 @@ def initiate_report(initiate_id):
     elif req_type == 5: # Karton
         df_orders = pd.read_sql(query_nav_lot, con_nav)
     elif req_type == 6: # Ventil
-        df_orders = pd.read_sql(query_ds_lot_ventil, con_nav)
+        df_orders = pd.read_sql(query_ds_lot_ventil, con_ds)
     else:
         df_orders = pd.DataFrame()
 

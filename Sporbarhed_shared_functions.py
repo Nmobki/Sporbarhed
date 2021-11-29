@@ -343,7 +343,7 @@ def get_email_subject(request_reference: str, request_type: int) -> str:
     dict_email_subject = {
         0: f'Anmodet rapport for ordre {request_reference}'
         ,1: f'Anmodet rapport for parti {request_reference}'
-        ,2: 'Anmodet rapport for opspræt'
+        ,2: 'Anmodet rapport for rework'
         ,3: f'Anmodet rapport for handelsvare {request_reference}'
         ,4: f'Anmodet rapport for folie {request_reference}'
         ,5: f'Anmodet rapport for karton {request_reference}'

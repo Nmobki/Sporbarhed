@@ -5,6 +5,8 @@
 import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
+import Sporbarhed_shared_rework as ssr
+import Sporbhared_shared_finished_goods as ssfg
 
 
 def initiate_report(initiate_id):
@@ -43,8 +45,8 @@ def initiate_report(initiate_id):
     # Formated date strings relevant for silos
     silo_req_date_dmy = req_dato.strftime('%d-%m-%Y')
     silo_req_date_ymd = ssf.convert_date_format(silo_req_date_dmy, 'dd-mm-yyyy', 'yyyy-mm-dd')
-    silo_last_empty_ymd = ssf.rework.get_silo_last_empty(req_reference_no, silo_req_date_ymd)
-    silo_next_empty_ymd = ssf.rework.get_silo_next_empty(req_reference_no, silo_req_date_ymd)
+    silo_last_empty_ymd = ssr.get_silo_last_empty(req_reference_no, silo_req_date_ymd)
+    silo_next_empty_ymd = ssr.get_silo_next_empty(req_reference_no, silo_req_date_ymd)
     # Read setup for section for reporttypes. NAV querys with NOLOCK to prevent deadlocks
     df_sections = ssf.get_ds_reporttype(req_type)
 
@@ -85,7 +87,7 @@ def initiate_report(initiate_id):
             df_generelt['Anmodet dato'] = silo_req_date_dmy
             df_generelt['Sidste tommelding'] = ssf.convert_date_format(silo_last_empty_ymd, 'yyyy-mm-dd', 'dd-mm-yyyy')
             df_generelt['Efterfølgende tommelding'] = ssf.convert_date_format(silo_next_empty_ymd, 'yyyy-mm-dd', 'dd-mm-yyyy')
-            df_generelt['Reworktype'] = ssf.rework.get_rework_type(req_reference_no)
+            df_generelt['Reworktype'] = ssr.get_rework_type(req_reference_no)
             # Transpose dataframe
             df_generelt = df_generelt[column_order].transpose()
             df_generelt = df_generelt.reset_index()
@@ -110,7 +112,7 @@ def initiate_report(initiate_id):
                     'Indhold varenavn','Kilde']
 
     # Dataframe containing any grinding orders that have used rework - also used in section 23..
-    df_rework_used_in = ssf.rework.get_rework_orders_from_dates(req_reference_no, silo_last_empty_ymd, silo_next_empty_ymd)
+    df_rework_used_in = ssr.get_rework_orders_from_dates(req_reference_no, silo_last_empty_ymd, silo_next_empty_ymd)
     # Create dataframe to query for all contents of rework silos using function
     df_rework_used = df_rework_used_in
     df_rework_used['Startdato'] = silo_last_empty_ymd
@@ -118,7 +120,7 @@ def initiate_report(initiate_id):
     df_rework_used['Silo'] = req_reference_no
     df_rework_used['Produktionsordre'] = df_rework_used['Ordrenummer']
     # Alter dataframe to contain results from function
-    df_rework_used = ssf.rework.get_rework_total(df_rework_used)
+    df_rework_used = ssr.get_rework_total(df_rework_used)
 
     if ssf.get_section_status_code(df_rework_used) == 99:
         try:
@@ -217,9 +219,9 @@ def initiate_report(initiate_id):
                                                df_nav_order_relations['Ordrenummer'].unique().tolist())
     order_numbers_fg_sql = ssf.string_to_sql(order_numbers_fg_sql)
     # Get string of lotnots
-    nav_lotnots = ssf.finished_goods.get_nav_lotnos_from_orders(order_numbers_fg_sql, 'string')
+    nav_lotnots = ssfg.get_nav_lotnos_from_orders(order_numbers_fg_sql, 'string')
     # Get results from Navision
-    df_nav_færdigvaretilgang = ssf.finished_goods.get_production_information(nav_lotnots)
+    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots)
 
     if ssf.get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
@@ -266,7 +268,7 @@ def initiate_report(initiate_id):
     columns_1_dec = ['Enheder','Kilo']
     columns_strip = ['Produktionsordrenummer']
 
-    df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots)
+    df_nav_debitorer = ssfg.get_sales_information(nav_lotnots)
 
     if ssf.get_section_status_code(df_nav_debitorer) == 99:
         try:

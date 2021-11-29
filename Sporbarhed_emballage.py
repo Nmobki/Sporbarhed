@@ -4,6 +4,7 @@
 import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
+import Sporbarhed_shared_finished_goods as ssfg
 
 
 def initiate_report(initiate_id):
@@ -137,11 +138,11 @@ def initiate_report(initiate_id):
 
     req_orders_total = ssf.string_to_sql(df_orders['Produktionsordrenummer'].unique().tolist())
     # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
-    nav_lotnots_total_sql_string = ssf.finished_goods.get_nav_lotnos_from_orders(req_orders_total, 'string')
+    nav_lotnots_total_sql_string = ssfg.get_nav_lotnos_from_orders(req_orders_total, 'string')
     # Get information about each production order based on lotnumbers identified above
-    df_nav_færdigvaretilgang = ssf.finished_goods.get_production_information(nav_lotnots_total_sql_string)
+    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string)
     # Get information about any sales to any customers based on lotnumbers identified above
-    df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots_total_sql_string)
+    df_nav_debitorer = ssfg.get_sales_information(nav_lotnots_total_sql_string)
 
 
     # =============================================================================
@@ -165,7 +166,6 @@ def initiate_report(initiate_id):
             df_generelt['Basisenhed'] = df_generelt.apply(lambda x: ssf.get_nav_item_info(x.Varenummer, 'Basisenhed'), axis = 1)
             df_generelt['Leverandørnummer'] = df_generelt.apply(lambda x: ssf.get_nav_item_info(x.Varenummer, 'Leverandørnummer'), axis = 1)
             df_generelt['Leverandørnavn'] = df_generelt.apply(lambda x: ssf.get_nav_vendor_info(x.Leverandørnummer, 'Navn'), axis = 1)
-            # df_nav_lotno.apply(lambda x: ssf.zero_division(x['Antal leakers'], x['Antal poser'], 'Zero'), axis=1)
             # Transpose dataframe
             df_generelt = df_generelt[column_order].transpose()
             df_generelt = df_generelt.reset_index()

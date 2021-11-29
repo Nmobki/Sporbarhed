@@ -4,6 +4,8 @@
 import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
+import Sporbarhed_shared_rework as ssr
+import Sporbarhed_shared_finished_goods as ssfg
 
 
 def initiate_report(initiate_id):
@@ -317,13 +319,13 @@ def initiate_report(initiate_id):
         df_probat_lg_to_ulr = pd.DataFrame()
 
     # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
-    nav_lotnots_total_sql_string = ssf.finished_goods.get_nav_lotnos_from_orders(req_orders_total, 'string')
+    nav_lotnots_total_sql_string = ssfg.get_nav_lotnos_from_orders(req_orders_total, 'string')
     # Get information about each production order based on lotnumbers identified above
-    df_nav_færdigvaretilgang = ssf.finished_goods.get_production_information(nav_lotnots_total_sql_string)
+    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string)
     # Get information about any sales to any customers based on lotnumbers identified above
-    df_nav_debitorer = ssf.finished_goods.get_sales_information(nav_lotnots_total_sql_string)
+    df_nav_debitorer = ssfg.get_sales_information(nav_lotnots_total_sql_string)
     # Get relationship between requested order and any orders which have used it as components, based on lotnumbers identified above
-    df_nav_orders = ssf.finished_goods.get_order_relationship(nav_lotnots_total_sql_string)
+    df_nav_orders = ssfg.get_order_relationship(nav_lotnots_total_sql_string)
 
     # Lotnumber information for the originally requested order
     query_nav_lotno = f""" SELECT ILE.[Lot No_] AS [Lotnummer]
@@ -765,7 +767,7 @@ def initiate_report(initiate_id):
     columns_strip = ['Kilde']
 
     if len(q_related_orders) != 0:
-        df_rework = ssf.rework.get_rework_total(ssf.rework.get_rework_silos(q_related_orders))
+        df_rework = ssr.get_rework_total(ssr.get_rework_silos(q_related_orders))
     else:
         df_rework = pd.DataFrame()
 

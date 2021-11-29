@@ -4,7 +4,7 @@
 import pandas as pd
 import Sporbarhed_råkaffe
 import Sporbarhed_færdigkaffe
-import Sporbarhed_opspræt
+import Sporbarhed_rework
 import Sporbarhed_emballage
 import Sporbarhed_shared_functions as ssf
 
@@ -41,7 +41,7 @@ if req_type == 0:
 elif req_type == 1:
     Sporbarhed_råkaffe.initiate_report(req_id)
 elif req_type == 2:
-    Sporbarhed_opspræt.initiate_report(req_id)
+    Sporbarhed_rework.initiate_report(req_id)
 elif req_type == 3:
     pass
 elif req_type in [4,5,6]:

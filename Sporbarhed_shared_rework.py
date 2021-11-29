@@ -4,6 +4,7 @@
 import pandas as pd
 import Sporbarhed_shared_server_information as sssi
 import Sporbarhed_shared_functions as ssf
+import Sporbarhed_shared_rework as ssr
 from datetime import datetime
 
 
@@ -163,7 +164,7 @@ def get_rework_prøvesmagning(start_date: str, end_date: str, silo: str, order_n
             # Get nessecary info for filtering
             df_temp['Varenummer'] = df_temp.apply(lambda x: ssf.get_nav_order_info(x.Indhold), axis=1)
             df_temp['Kaffetype'] = df_temp.apply(lambda x: ssf.get_nav_item_info(x.Varenummer, 'Kaffetype'), axis=1)
-            df_temp['Kaffetype_silo'] = df_temp.apply(lambda x: ssf.rework.get_rework_type(silo), axis=1)
+            df_temp['Kaffetype_silo'] = df_temp.apply(lambda x: ssr.get_rework_type(silo), axis=1)
             # Filter columns
             df_temp.query('Kaffetype_silo == Kaffetype', inplace=True)
             # Add last info and return relevant columns

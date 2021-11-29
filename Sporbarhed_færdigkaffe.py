@@ -6,6 +6,7 @@ import networkx as nx
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_rework as ssr
 import Sporbarhed_shared_finished_goods as ssfg
+import Sporbarhed_shared_silo_layers as sssl
 
 
 def initiate_report(initiate_id):
@@ -854,7 +855,7 @@ def initiate_report(initiate_id):
                     'Foregående kontraktnummer','Foregående modtagelse',
                     'Efterfølgende kontraktnummer','Efterfølgende modtagelse']
     
-    df_silolag = ssf.silo_layers.get_200silo_layers_from_orders(q_related_orders)
+    df_silolag = sssl.get_200silo_layers_from_orders(q_related_orders)
     
     if ssf.get_section_status_code(df_silolag) == 99:
         try:

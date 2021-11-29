@@ -4,8 +4,6 @@
 import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
-import Sporbarhed_shared_rework as ssr
-import Sporbarhed_shared_silo_layers as sssl
 import Sporbarhed_shared_finished_goods as ssfg
 
 

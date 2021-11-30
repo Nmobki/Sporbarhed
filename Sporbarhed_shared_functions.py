@@ -352,5 +352,6 @@ def get_email_subject(request_reference: str, request_type: int) -> str:
         ,4: f'Anmodet rapport for folie {request_reference}'
         ,5: f'Anmodet rapport for karton {request_reference}'
         ,6: f'Anmodet rapport for ventil {request_reference}'
+        ,7: f'Anmodet rapport for risteordre {request_reference}'
     }
     return str(dict_email_subject[request_type])

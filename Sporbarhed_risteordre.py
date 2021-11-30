@@ -55,7 +55,7 @@ def initiate_report(initiate_id):
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
     cursor_ds.commit()
-    ssf.log_insert(script_name, f'Request id: {req_id} initiated')
+    # ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
@@ -92,28 +92,28 @@ def initiate_report(initiate_id):
     column_order = ['Receptnummer', 'Receptnavn', 'Farve sætpunkt', 'Vandprocent sætpunkt',
                     'Dato', 'Rister', 'Probat id', 'Silo', 'Kilo']
     columns_1_dec = ['Kilo']
+    columns_2_pct = ['Vandprocent sætpunkt']
     columns_strip = ['Dato','Silo']
-
     if ssf.get_section_status_code(df_generelt) == 99:
         try:
-            df_generelt = ''
-            # Apply column formating
-            for col in columns_1_dec:
-                df_generelt[col] = df_generelt[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
-            df_generelt['Produktionsdato'] = df_generelt['Produktionsdato'].dt.strftime('%d-%m-%Y')
+            df_generelt['Dato'] = df_generelt['Dato'].dt.strftime('%d-%m-%Y')
             # Group columns TODO!!!!!!!!!!!!!!!!!!!!!!!!
             df_generelt = df_generelt.groupby(['Receptnummer','Rister', 'Probat id']).agg(
                {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                 'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
                 'Kilo': 'sum'
                }).reset_index()
-            # Remove trailing and leading commas
-            for col in columns_strip:
-                df_generelt[col] = df_generelt[col].apply(lambda x: ssf.strip_comma_from_string(x))
             # Lookup values from item table
             df_generelt['Receptnavn'] = df_generelt.apply(lambda x: ssf.get_nav_item_info(x.Receptnummer, 'Beskrivelse'), axis=1)
             df_generelt['Farve sætpunkt'] = df_generelt.apply(lambda x: ssf.get_nav_item_info(x.Receptnummer, 'Farve'), axis=1)
             df_generelt['Vandprocent sætpunkt'] = df_generelt.apply(lambda x: ssf.get_nav_item_info(x.Receptnummer, 'Vandprocent'), axis=1)
+            # Data/column formating
+            for col in columns_strip:
+                df_generelt[col] = df_generelt[col].apply(lambda x: ssf.strip_comma_from_string(x))            
+            for col in columns_1_dec:
+                df_generelt[col] = df_generelt[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            for col in columns_2_pct:
+                df_generelt[col] = df_generelt[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
             # Transpose dataframe
             df_generelt = df_generelt[column_order].transpose()
             df_generelt = df_generelt.reset_index()

@@ -97,7 +97,7 @@ def initiate_report(initiate_id):
     if ssf.get_section_status_code(df_generelt) == 99:
         try:
             df_generelt['Dato'] = df_generelt['Dato'].dt.strftime('%d-%m-%Y')
-            # Group columns TODO!!!!!!!!!!!!!!!!!!!!!!!!
+            # Group columns
             df_generelt = df_generelt.groupby(['Receptnummer','Rister', 'Probat id']).agg(
                {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                 'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
@@ -126,6 +126,73 @@ def initiate_report(initiate_id):
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_generelt))
+
+    # =============================================================================
+    # Section 25: Probat ristebatch
+    # =============================================================================
+    section_id = 25
+    section_name = ssf.get_section_name(section_id, df_sections)
+    column_order = ['Batch id', 'Batchnummer', 'Kilo råkaffe', 'Kilo ristet kaffe', 'Kilo svind',
+                    'Svind procent', 'Farve ny', 'Farve gammel', 'Vandprocent', 'Liter vand',
+                    'Sluttemperatur', 'Ristetid', 'Tid i forvarmer', 'Energiforbrug (kwh)',
+                    'Gasforbrug (m3)']
+    columns_1_dec = ['Kilo råkaffe', 'Kilo ristet kaffe', 'Kilo svind', 'Energiforbrug (kwh)',
+                     'Gasforbrug (m3)', 'Liter vand']
+    columns_2_pct = ['Svind procent', 'Vandprocent']
+
+    query_probat_batch = f""" WITH CTE_LR AS (
+                            SELECT [BATCH_ID] AS [Batch id],SUM([WEIGHT] / 1000.0) AS [Kilo råkaffe]
+                            FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
+                            WHERE [ORDER_NAME] = '{req_order_no}'
+                            GROUP BY [BATCH_ID] )
+                            ,CTE_ULR AS (
+                            SELECT [BATCH_ID] ,SUM([WEIGHT] / 1000.0) AS [Kilo ristet kaffe]
+                            FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
+                            WHERE [ORDER_NAME] = '{req_order_no}'
+                            GROUP BY [BATCH_ID] )
+                            ,CTE_SAMPLES AS (
+                            SELECT [BATCH_ID] ,[COLOR_NEW] / 100.0 AS [Farve ny]
+                            ,[COLOR_OLD] / 100.0 AS [Farve gammel],[HUMIDITY] / 100.0 / 100.0 AS [Vandprocent]
+                            FROM [dbo].[PRO_EXP_SAMPLE_ROASTER]
+                            WHERE [PRO_EXPORT_GENERAL_ID] IN ( SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_ROASTER] GROUP BY [BATCH_ID])
+                            )
+                            
+                            SELECT CTE_LR.[Batch id] ,ROW_NUMBER() OVER (ORDER BY CTE_LR.[Batch id]) AS [Batchnummer]
+                            	,CTE_LR.[Kilo råkaffe] ,CTE_ULR.[Kilo ristet kaffe]
+                            	,CTE_LR.[Kilo råkaffe] - CTE_ULR.[Kilo ristet kaffe] AS [Kilo svind]
+                            	,CTE_SAMPLES.[Farve ny] ,CTE_SAMPLES.[Farve gammel]
+                            	,CTE_SAMPLES.[Vandprocent] ,BDR.[WATER_PRECOOLING] / 10.0 AS [Liter vand]
+                            	,BDR.[FINAL_TEMP_ROASTING] / 10.0 AS [Sluttemperatur]
+                            	,BDR.[ROAST_TIME] / 10.0 AS [Ristetid]
+                            	,BDR.[TIME_PREHEATING] / 10.0 AS [Tid i forvarmer]
+                            	,BDR.[ENERGY_CONSUMPTION] /10.0 AS [Energiforbrug (kwh)]
+                            	,( BDR.[FUEL_MAIN_BURNER] + BDR.[FUEL_AFTER_BURNER] ) / 10.0 AS [Gasforbrug (m3)]
+                            FROM CTE_LR
+                            LEFT JOIN CTE_ULR ON CTE_LR.[Batch id] = CTE_ULR.[BATCH_ID]
+                            LEFT JOIN [dbo].[PRO_EXP_BATCH_DATA_ROASTER] AS BDR ON CTE_LR.[Batch id] = BDR.[BATCH_ID]
+                            LEFT JOIN CTE_SAMPLES ON CTE_LR.[Batch id] = CTE_SAMPLES.[BATCH_ID] """
+    df_probat_batch = pd.read_sql(query_probat_batch, con_probat)
+
+    if ssf.get_section_status_code(df_probat_batch) == 99:
+        try:
+            #TODO!!!!!!!!!!!! Add a total with sum of kilos and loss percentage
+            
+            # Calculate loss percentage
+            df_probat_batch['Svind procent'] = df_probat_batch.apply(lambda x: ssf.zero_division(x['Kilo svind'], x['Kilo råkaffe'], 'Zero'), axis=1)
+            # Data/column formating         
+            for col in columns_1_dec:
+                df_probat_batch[col] = df_probat_batch[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            for col in columns_2_pct:
+                df_probat_batch[col] = df_probat_batch[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
+            df_probat_batch = df_probat_batch[column_order]
+            # Write results to Excel
+            ssf.insert_dataframe_into_excel(excel_writer, df_probat_batch, section_name, False)
+            # Write status into log
+            ssf.section_log_insert(req_id, section_id, 0)
+        except Exception as e: # Insert error into log
+            ssf.section_log_insert(req_id, section_id, 2, e)
+    else: # Write into log if no data is found or section is out of scope
+        ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_probat_batch))
 
 
 

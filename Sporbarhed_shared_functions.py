@@ -262,21 +262,25 @@ def log_insert(event: str, note: str):
 
 # Get info from item table in Navision
 # Query for Navision items, used for adding information to item numbers not queried directly from Navision
-query_nav_items = """ SELECT [No_] AS [Nummer],[Description] AS [Beskrivelse]
-                  ,[Item Category Code] AS [Varekategorikode]
-				  ,CASE WHEN [Display Item] = 1 THEN 'Display'
-				  WHEN [Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
-				  WHEN [No_] LIKE '1040%' THEN 'Ristet kaffe'
-				  WHEN [No_] LIKE '1050%' THEN 'Formalet kaffe'
-				  WHEN [No_] LIKE '1020%' THEN 'Råkaffe'
-				  ELSE [Item Category Code] END AS [Varetype]
-				  ,CASE WHEN [Produktionskode] LIKE '%HB%' THEN 'Helbønne' ELSE 'Formalet' END AS [Kaffetype]
-				  ,[Base Unit of Measure] AS [Basisenhed]
-				  ,[Vendor No_] AS [Leverandørnummer]
-                  FROM [dbo].[BKI foods a_s$Item] """
+query_nav_items = """ SELECT I.[No_] AS [Nummer],I.[Description] AS [Beskrivelse]
+                  ,I.[Item Category Code] AS [Varekategorikode]
+				  ,CASE WHEN I.[Display Item] = 1 THEN 'Display'
+				  WHEN I.[Item Category Code] = 'FÆR KAFFE' THEN 'Færdigkaffe'
+				  WHEN I.[No_] LIKE '1040%' THEN 'Ristet kaffe'
+				  WHEN I.[No_] LIKE '1050%' THEN 'Formalet kaffe'
+				  WHEN I.[No_] LIKE '1020%' THEN 'Råkaffe'
+				  ELSE I.[Item Category Code] END AS [Varetype]
+				  ,CASE WHEN I.[Produktionskode] LIKE '%HB%' THEN 'Helbønne' ELSE 'Formalet' END AS [Kaffetype]
+				  ,I.[Base Unit of Measure] AS [Basisenhed]
+				  ,I.[Vendor No_] AS [Leverandørnummer]
+				  ,CAST(PRI.[COLOR] AS INT) AS [Farve] 
+				  ,PRI.[HUMIDITY] / 100.0 AS [Vandprocent]
+                  FROM [dbo].[BKI foods a_s$Item] AS I
+				  LEFT JOIN [dbo].[BKI foods a_s$PROBAT Item] AS PRI
+				  ON I.[No_] = PRI.[CUSTOMER_CODE] """
 df_nav_items = pd.read_sql(query_nav_items, con_nav)
 
-def get_nav_item_info(item_no: str, field: str) -> str:
+def get_nav_item_info(item_no: str, field: str):
     """Returns information for the requested item number and field from Navision. """
     if item_no in df_nav_items['Nummer'].tolist():
         df_temp = df_nav_items[df_nav_items['Nummer'] == item_no]

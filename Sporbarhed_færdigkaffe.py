@@ -1014,10 +1014,8 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
-            # Data formating
             for col in columns_0_dec:
                 df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: ssf.number_format(x, 'dec_0'))
-            # Data formating
             for col in columns_2_pct:
                 df_nav_lotno[col] = df_nav_lotno[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
             # Write results to Excel

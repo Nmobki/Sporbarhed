@@ -7,6 +7,7 @@ import Sporbarhed_færdigkaffe
 import Sporbarhed_rework
 import Sporbarhed_emballage
 import Sporbarhed_shared_functions as ssf
+import Sporbarhed_risteordre
 
 
 # =============================================================================
@@ -46,6 +47,9 @@ elif req_type == 3:
     pass
 elif req_type in [4,5,6]:
     Sporbarhed_emballage.initiate_report(req_id)
+elif req_type == 7:
+    pass
+    Sporbarhed_risteordre.initiate_report(req_id)
 
 # Exit script
 ssf.get_exit_check(0)

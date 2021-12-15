@@ -77,11 +77,16 @@ def initiate_report(initiate_id):
     query__nav_generelt = f""" SELECT TOP 1 PL.[Buy-from Vendor No_] AS [Leverandørnummer]
                     	,V.[Name] AS [Leverandørnavn] ,PL.[No_] AS [Varenummer]
                         ,I.[Description] AS [Varenavn] ,I.[Mærkningsordning]
+						,CR.[Name] +' (' +PH.[Pay-to Country_Region Code] + ')' AS [Oprindelsesland]
                         FROM [dbo].[BKI foods a_s$Purchase Line] AS PL
                         INNER JOIN [dbo].[BKI foods a_s$Item] AS I
                             ON PL.[No_] = I.[No_]
+						INNER JOIN [dbo].[BKI foods a_s$Purchase Header] AS PH
+							ON PL.[Document No_] = PH.[No_]
                         LEFT JOIN [dbo].[BKI foods a_s$Vendor] AS V
                             ON PL.[Buy-from Vendor No_] = V.[No_]
+						LEFT JOIN [dbo].[BKI foods a_s$Country_Region] AS CR
+							ON PH.[Pay-to Country_Region Code] = CR.[Code]
                         WHERE PL.[Type] = 2
                             AND PL.[Document No_] = '{req_reference_no}' """
     df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
@@ -429,8 +434,8 @@ def initiate_report(initiate_id):
     # =============================================================================
     section_id = 1
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = ['Kontraktnummer','Modtagelse','Varenummer','Varenavn','Mærkningsordning','Leverandørnummer'
-                    ,'Leverandørnavn','Silobeholdning eksporteret']
+    column_order = ['Kontraktnummer','Modtagelse','Varenummer','Varenavn','Mærkningsordning','Oprindelsesland',
+                    'Leverandørnummer','Leverandørnavn','Silobeholdning eksporteret']
 
     if ssf.get_section_status_code(df_nav_generelt) == 99:
         try:

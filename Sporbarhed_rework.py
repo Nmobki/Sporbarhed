@@ -121,7 +121,6 @@ def initiate_report(initiate_id):
     df_rework_used['Produktionsordre'] = df_rework_used['Ordrenummer']
     # Alter dataframe to contain results from function
     df_rework_used = ssr.get_rework_total(df_rework_used)
-
     if ssf.get_section_status_code(df_rework_used) == 99:
         try:
             df_rework_used['Indhold varenummer'] = df_rework_used['Produktionsordre'].apply(lambda x: ssf.get_nav_order_info(x))

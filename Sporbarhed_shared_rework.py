@@ -90,11 +90,11 @@ def get_rework_orders_from_dates(silo: str, start_date: str, end_date: str):
                 ,[ORDER_NAME], [SOURCE]
             UNION ALL
             SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                ,[DEST_NAME],[ORDER_NAME]
+                ,[SOURCE_NAME],[ORDER_NAME]
             FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
             WHERE [ORDER_NAME] IS NOT NULL
             GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                ,[ORDER_NAME], [DEST_NAME] )
+                ,[ORDER_NAME], [SOURCE_NAME] )
             SELECT [Dato], [Ordrenummer] FROM [ORDERS_CTE]
             WHERE [Silo] = '{silo}' AND [Dato] BETWEEN '{start_date}' AND '{end_date}' 
             GROUP BY  [Dato], [Ordrenummer] """

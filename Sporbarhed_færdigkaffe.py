@@ -382,16 +382,29 @@ def initiate_report(initiate_id):
     q_related_orders = ssf.string_to_sql(orders_related)
 
     # Related grinding orders - information for batches out of grinder to include rework
-    query_probat_ulg = f""" SELECT DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                       ,[PRODUCTION_ORDER_ID] AS [Probat id] ,[SOURCE_NAME] AS [Mølle]
-                       ,[ORDER_NAME] AS [Ordrenummer] ,[D_CUSTOMER_CODE] AS [Receptnummer]
-                       ,[DEST_NAME] AS [Silo],SUM([WEIGHT]) / 1000.0 AS [Kilo]
-                       FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                       WHERE [ORDER_NAME] IN ({q_related_orders})
-                       GROUP BY [PRODUCTION_ORDER_ID],[ORDER_NAME],[DEST_NAME],[SOURCE_NAME]
-                       ,[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) """
+    query_probat_ulg = f""" WITH SAMPLES AS ( SELECT [ORDER_NAME] ,AVG([SIEVE_1] / 100.0) AS [Si 1]
+                            ,AVG([SIEVE_2] / 100.0) AS [Si 2] ,AVG([SIEVE_3] / 100.0) AS [Si 3]
+                            ,AVG([BUND] / 100.0) AS [Bund]
+                        FROM [dbo].[PRO_EXP_SAMPLE_GRINDER]
+                        WHERE [ORDER_NAME] IN ({q_related_orders})
+                        	AND [PRO_EXPORT_GENERAL_ID] IN ( SELECT MAX([PRO_EXPORT_GENERAL_ID]) 
+                                                         FROM [dbo].[PRO_EXP_SAMPLE_GRINDER] GROUP BY [SAMPLE_ID])
+                        GROUP BY [ORDER_NAME] )
+                        SELECT DATEADD(D, DATEDIFF(D, 0, ULG.[RECORDING_DATE] ), 0) AS [Dato]
+                        ,ULG.[PRODUCTION_ORDER_ID] AS [Probat id] ,ULG.[SOURCE_NAME] AS [Mølle]
+                        ,ULG.[ORDER_NAME] AS [Ordrenummer] ,ULG.[D_CUSTOMER_CODE] AS [Receptnummer]
+                        ,ULG.[DEST_NAME] AS [Silo],SUM(ULG.[WEIGHT]) / 1000.0 AS [Kilo]
+					    ,S.[Si 1], S.[Si 2], S.[Si 3], S.[Bund]
+                        FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G] AS ULG
+					    LEFT JOIN SAMPLES AS S
+    						ON ULG.[ORDER_NAME] = S.[ORDER_NAME]
+                        WHERE ULG.[ORDER_NAME] IN ({q_related_orders})
+                        GROUP BY ULG.[PRODUCTION_ORDER_ID],ULG.[ORDER_NAME],ULG.[DEST_NAME],ULG.[SOURCE_NAME]
+                        ,ULG.[D_CUSTOMER_CODE], DATEADD(D, DATEDIFF(D, 0, ULG.[RECORDING_DATE] ), 0),
+					    S.[Si 1], S.[Si 2], S.[Si 3], S.[Bund] """
     df_probat_ulg = pd.DataFrame(columns=['Dato','Probat id','Mølle','Ordrenummer',
-                                          'Receptnummer','Silo','Kilo'])
+                                          'Receptnummer','Silo','Kilo','Si 1','Si 2',
+                                          'Si 3', 'Bund'])
     if len(q_related_orders) != 0:
         df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
 
@@ -603,8 +616,9 @@ def initiate_report(initiate_id):
     section_id = 4
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Mølle',
-                    'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
-    columns_1_dec = ['Kilo']
+                    'Probat id', 'Ordrenummer', 'Silo', 'Kilo',
+                    'Si 1', 'Si 2', 'Si 3', 'Bund']
+    columns_1_dec = ['Kilo','Si 1', 'Si 2', 'Si 3', 'Bund']
     columns_strip = ['Dato','Silo','Mølle']
 
     if ssf.get_section_status_code(df_probat_ulg) == 99:
@@ -616,7 +630,8 @@ def initiate_report(initiate_id):
             df_probat_ulg['Dato'] = df_probat_ulg['Dato'].dt.strftime('%d-%m-%Y')
             # Join multiple dates or silos to one commaseparated string
             df_probat_ulg = df_probat_ulg.groupby(['Receptnummer', 'Receptnavn',
-                                                   'Probat id', 'Ordrenummer']).agg(
+                                                   'Probat id', 'Ordrenummer',
+                                                   'Si 1', 'Si 2', 'Si 3', 'Bund'],dropna=False).agg(
                                                        {'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                         'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                         'Mølle': lambda x: ','.join(sorted(pd.Series.unique(x))),
@@ -632,6 +647,7 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            df_temp_total.replace({'nan': None}, inplace=True)
             # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
             # Write status into log

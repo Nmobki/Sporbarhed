@@ -341,6 +341,27 @@ def get_nav_orders_from_related_orders(orders: str):
                                ({orders}) AND [Invalid] = 0 """
     return pd.read_sql(query, con_nav)
 
+# Get information whether a contract/delivery has been tasted and approved.
+def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
+    """ Returns the first ID from BKI_Datastore on which a given contract/delivery
+        has been approved on. \n Returns None if no approved ID can be found. """
+    query = f""" SELECT	MIN(S.[Id]) AS [Id]
+                FROM [cof].[Risteri_råkaffe_planlægning] AS RRP
+                INNER JOIN [cof].[Risteri_modtagelse_registrering] AS RMR
+                	ON RRP.[Id] = RMR.[Id_org]
+                	AND RMR.[Id_org_kildenummer] = 3
+                INNER JOIN [cof].[Smageskema] AS S
+                	ON RMR.[Id] = S.[Id_org]
+                	AND S.[Id_org_kildenummer] = 1
+                WHERE RRP.[Kontraktnummer] = '{contract}'
+                	AND RRP.[Delivery] = '{delivery}'
+                	AND S.[Status] = 1 """
+    df = pd.read_sql(query, con_ds)
+    if len(df) == 0:
+        return None
+    else:
+        return str(df['Id'].iloc[0])
+
 # Get subject for emails depending on request type
 def get_email_subject(request_reference: str, request_type: int) -> str:
     """Returns a string with subject for email."""

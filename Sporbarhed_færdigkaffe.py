@@ -426,18 +426,33 @@ def initiate_report(initiate_id):
     q_related_orders = ssf.string_to_sql(orders_related)
 
     # Find information for identified roasting orders, batches out of roaster
-    query_probat_ulr = f""" SELECT [S_CUSTOMER_CODE] AS [Receptnummer]
-                            ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                            ,[SOURCE_NAME] AS [Rister] ,[PRODUCTION_ORDER_ID] AS [Probat id]
-                        	,[ORDER_NAME] AS [Ordrenummer] ,SUM([WEIGHT]) / 1000.0 AS [Kilo]
-    						,[DEST_NAME] AS [Silo]
-                            FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
-                            WHERE [ORDER_NAME] IN ({q_related_orders})
-                            GROUP BY [S_CUSTOMER_CODE],[SOURCE_NAME],[PRODUCTION_ORDER_ID]
-                            ,[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-    						,[DEST_NAME] """
+    query_probat_ulr = f""" WITH SAMPLES AS ( SELECT [ORDER_NAME]
+                            ,AVG(CASE WHEN [COLOR_NEW]  = 0 THEN NULL ELSE [COLOR_NEW] END / 100.0) AS [Farve ny]
+                            ,AVG(CASE WHEN [COLOR_OLD]  = 0 THEN NULL ELSE [COLOR_OLD] END / 100.0) AS [Farve gl]
+                            ,AVG([END_TEMP] / 10.0) AS [Slut temp]
+                            ,AVG([WATER] / 10.0) AS [L vand]
+                            ,AVG(CASE WHEN [HUMIDITY] = 0 THEN NULL ELSE [HUMIDITY] END / 10000.0) AS [Vandpct] 
+                        	,COUNT(*) AS [Antal samples]
+                            FROM [dbo].[PRO_EXP_SAMPLE_ROASTER]
+                            WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_ROASTER] GROUP BY [SAMPLE_ID])
+                            GROUP BY [ORDER_NAME] )
+                            SELECT ULR.[S_CUSTOMER_CODE] AS [Receptnummer]
+                            ,DATEADD(D, DATEDIFF(D, 0, ULR.[RECORDING_DATE] ), 0) AS [Dato]
+                            ,ULR.[SOURCE_NAME] AS [Rister] ,ULR.[PRODUCTION_ORDER_ID] AS [Probat id]
+                        	,ULR.[ORDER_NAME] AS [Ordrenummer] ,SUM(ULR.[WEIGHT]) / 1000.0 AS [Kilo]
+    						,ULR.[DEST_NAME] AS [Silo], S.[Farve gl], S.[Farve ny], S.[Vandpct]
+							,S.[Antal samples], S.[L vand], S.[Slut temp]
+                            FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R] AS ULR
+							LEFT JOIN SAMPLES AS S
+								ON ULR.[ORDER_NAME] = S.[ORDER_NAME]
+                            WHERE ULR.[ORDER_NAME] IN ({q_related_orders})
+                            GROUP BY ULR.[S_CUSTOMER_CODE],ULR.[SOURCE_NAME],ULR.[PRODUCTION_ORDER_ID]
+                            ,ULR.[ORDER_NAME],DATEADD(D, DATEDIFF(D, 0, ULR.[RECORDING_DATE] ), 0)
+    						,ULR.[DEST_NAME],S.[Farve gl], S.[Farve ny], S.[Vandpct]
+							,S.[Antal samples], S.[L vand], S.[Slut temp] """
     df_probat_ulr = pd.DataFrame(columns=['Receptnummer','Dato','Rister','Probat id',
-                                          'Ordrenummer','Kilo','Silo'])
+                                          'Ordrenummer','Kilo','Silo', 'Farve gl', 'Farve ny',
+                                          'Vandpct','Antal samples','L vand','Slut temp'])
     if len(q_related_orders) != 0:
         df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
@@ -663,8 +678,11 @@ def initiate_report(initiate_id):
     section_id = 5
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Receptnummer', 'Receptnavn', 'Dato', 'Rister',
-                    'Probat id', 'Ordrenummer', 'Silo', 'Kilo']
-    columns_1_dec = ['Kilo']
+                    'Probat id', 'Ordrenummer', 'Silo', 'Kilo', 'Farve gl',
+                    'Farve ny', 'Vandpct', 'Antal samples', 'L vand' ,'Slut temp']
+    columns_1_dec = ['Kilo', 'L vand']
+    columns_0_dec = ['Farve gl','Farve ny','Slut temp']
+    columns_pct_2 = ['Vandpct']
     columns_strip = ['Dato','Silo']
 
     if ssf.get_section_status_code(df_probat_ulr) == 99:
@@ -676,7 +694,9 @@ def initiate_report(initiate_id):
             df_probat_ulr['Dato'] = df_probat_ulr['Dato'].dt.strftime('%d-%m-%Y')
             # Join multiple dates or silos to one commaseparated string
             df_probat_ulr = df_probat_ulr.groupby(['Receptnummer', 'Receptnavn',
-                                                   'Rister','Probat id', 'Ordrenummer']).agg(
+                                                   'Rister','Probat id', 'Ordrenummer',
+                                                   'Farve gl', 'Farve ny', 'Vandpct',
+                                                   'Antal samples', 'L vand' ,'Slut temp'],dropna=False).agg(
                                                        {'Silo': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                         'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                                                         'Kilo': 'sum'
@@ -691,6 +711,11 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            for col in columns_0_dec:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_0'))
+            for col in columns_pct_2:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
+            df_temp_total.replace({'nan': None, 'nan%': None}, inplace=True)
             # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
             # Write status into log

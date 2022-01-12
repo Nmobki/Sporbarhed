@@ -457,16 +457,28 @@ def initiate_report(initiate_id):
         df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
 
     # Find green coffee related to orders
-    query_probat_lr = f""" SELECT [S_TYPE_CELL] AS [Sortnummer] ,[Source] AS [Silo]
-                    ,[S_CONTRACT_NO] AS [Kontraktnummer]
-                    ,[S_DELIVERY_NAME] AS [Modtagelse],[ORDER_NAME] AS [Ordrenummer]
-                	,SUM([WEIGHT]) / 1000.0 AS [Kilo]
-                    FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
-                    WHERE [ORDER_NAME] IN ({q_related_orders})
-                    GROUP BY [S_TYPE_CELL],[Source],[S_CONTRACT_NO]
-                    	,[S_DELIVERY_NAME],[ORDER_NAME] """
+    query_probat_lr = f""" WITH SAMPLES AS ( SELECT [CONTRACT_NO] ,[DELIVERY_NAME]
+                           ,AVG(CASE WHEN [HUMIDITY_1] = 0 THEN NULL ELSE [HUMIDITY_1] / 10000.0 END) AS [Vandpct 1]
+                           ,AVG(CASE WHEN [HUMIDITY_2] = 0 THEN NULL ELSE [HUMIDITY_2] / 10000.0 END) AS [Vandpct 2]
+                           ,AVG(CASE WHEN [VOLUME] = 0 THEN NULL ELSE [VOLUME] END) AS [Volumen]
+                           FROM [BKI_IMP_EXP].[dbo].[PRO_EXP_SAMPLE_RECEIVING]
+                           WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
+                           GROUP BY [CONTRACT_NO] ,[DELIVERY_NAME] )
+                           SELECT LR.[S_TYPE_CELL] AS [Sortnummer] ,LR.[Source] AS [Silo]
+                           ,LR.[S_CONTRACT_NO] AS [Kontraktnummer]
+                          ,LR.[S_DELIVERY_NAME] AS [Modtagelse],LR.[ORDER_NAME] AS [Ordrenummer]
+    					  ,S.[Vandpct 1], S.[Vandpct 2], S.[Volumen]
+                    	  ,SUM(LR.[WEIGHT]) / 1000.0 AS [Kilo]
+                          FROM [dbo].[PRO_EXP_ORDER_LOAD_R] AS LR
+    					  LEFT JOIN SAMPLES AS S
+    						ON LR.[S_CONTRACT_NO] = S.[CONTRACT_NO]
+    						AND LR.[S_DELIVERY_NAME] = S.[DELIVERY_NAME]
+                          WHERE LR.[ORDER_NAME] IN ({q_related_orders})
+                          GROUP BY LR.[S_TYPE_CELL],LR.[Source],LR.[S_CONTRACT_NO]
+                          ,LR.[S_DELIVERY_NAME],LR.[ORDER_NAME] ,S.[Vandpct 1], S.[Vandpct 2], S.[Volumen] """
     df_probat_lr = pd.DataFrame(columns=['Sortnummer','Silo','Kontraktnummer',
-                                         'Modtagelse','Ordrenummer','Kilo'])
+                                         'Modtagelse','Ordrenummer','Kilo',
+                                         'Vandpct 1', 'Vandpct 2', 'Volumen'])
     if len(q_related_orders) != 0:
         df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
 
@@ -731,8 +743,9 @@ def initiate_report(initiate_id):
     section_id = 6
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Sortnummer','Sortnavn','Kontraktnummer','Modtagelse', 'Silo',
-                    'Ordrenummer','Kilo']
+                    'Ordrenummer','Kilo', 'Vandpct 1', 'Vandpct 2', 'Volumen', 'Godkendt på id']
     columns_1_dec = ['Kilo']
+    columns_2_pct = ['Vandpct 1', 'Vandpct 2']
 
     if ssf.get_section_status_code(df_probat_lr) == 99:
         try:
@@ -740,6 +753,8 @@ def initiate_report(initiate_id):
             dict_rister_ind_total = {'Kilo':[df_probat_lr['Kilo'].sum()],'Silo':None}
              # Look up column values
             df_probat_lr['Sortnavn'] = df_probat_lr['Sortnummer'].apply(ssf.get_nav_item_info, field='Beskrivelse')
+            df_probat_lr['Godkendt på id'] = df_probat_lr.apply(lambda x: ssf.get_contract_delivery_approval_id(x['Kontraktnummer'], 
+                                                                                                                x['Modtagelse']), axis=1)
             # Create temp dataframe with total
             df_temp_total = pd.concat([df_probat_lr, pd.DataFrame.from_dict(data=dict_rister_ind_total, orient='columns')])
             df_temp_total = df_temp_total[column_order]
@@ -747,6 +762,9 @@ def initiate_report(initiate_id):
             # Data formating
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            for col in columns_2_pct:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
+            df_temp_total.replace({'nan': None, 'nan%': None}, inplace=True)
             # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
             # Write status into log

@@ -344,8 +344,10 @@ def get_nav_orders_from_related_orders(orders: str):
 # Get information whether a contract/delivery has been tasted and approved.
 def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
     """ Returns the first ID from BKI_Datastore on which a given contract/delivery
-        has been approved on. \n Returns None if no approved ID can be found. """
-    query = f""" SELECT	MIN(S.[Id]) AS [Id]
+        has been approved on. \n Returns None if no approved ID can be found. 
+        If None is input as delivery the first approval of contract is returned,
+        regardless of any deliveries."""
+    query_del = f""" SELECT	MIN(S.[Id]) AS [Id]
                 FROM [cof].[Risteri_råkaffe_planlægning] AS RRP
                 INNER JOIN [cof].[Risteri_modtagelse_registrering] AS RMR
                 	ON RRP.[Id] = RMR.[Id_org]
@@ -356,7 +358,13 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
                 WHERE RRP.[Kontraktnummer] = '{contract}'
                 	AND RRP.[Delivery] = '{delivery}'
                 	AND S.[Status] = 1 """
-    df = pd.read_sql(query, con_ds)
+    
+    query_no_del = f""" SELECT MAX([Id]) AS [Id] FROM [cof].[Smageskema]
+                        WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0 """
+    if delivery is None:
+        df = pd.read_sql(query_no_del, con_ds)
+    else:
+        df = pd.read_sql(query_del, con_ds)
     if len(df) == 0:
         return None
     else:

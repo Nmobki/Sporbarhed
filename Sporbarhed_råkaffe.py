@@ -229,14 +229,30 @@ def initiate_report(initiate_id):
         df_probat_roast_input = pd.DataFrame()
 
     # Output from roasters
-    query_probat_roast_output = f""" SELECT
-                                DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0) AS [Dato]
-                                ,[DEST_NAME] AS [Silo] ,[ORDER_NAME] AS [Ordrenummer]
-                                ,SUM([WEIGHT]) / 1000.0 AS [Kilo ristet]
-                                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R]
-                                WHERE [ORDER_NAME] IN ({sql_roast_orders})
-                                GROUP BY DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
-                                ,[DEST_NAME] ,[ORDER_NAME] """
+    query_probat_roast_output = f""" WITH SAMPLES AS ( SELECT [ORDER_NAME]
+                                ,AVG(CASE WHEN [COLOR_NEW]  = 0 THEN NULL ELSE [COLOR_NEW] END / 100.0) AS [Farve ny]
+                                ,AVG(CASE WHEN [COLOR_OLD]  = 0 THEN NULL ELSE [COLOR_OLD] END / 100.0) AS [Farve gl]
+                                ,AVG([END_TEMP] / 10.0) AS [Slut temp]
+                                ,AVG([WATER] / 10.0) AS [L vand]
+                                ,AVG(CASE WHEN [HUMIDITY] = 0 THEN NULL ELSE [HUMIDITY] END / 10000.0) AS [Vandpct] 
+                            	,COUNT(*) AS [Antal samples]
+                                FROM [dbo].[PRO_EXP_SAMPLE_ROASTER]
+                                WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_ROASTER] GROUP BY [SAMPLE_ID])
+                                GROUP BY [ORDER_NAME] )
+                                SELECT
+                                DATEADD(D, DATEDIFF(D, 0, ULR.[RECORDING_DATE] ), 0) AS [Dato]
+                                ,ULR.[DEST_NAME] AS [Silo] ,ULR.[ORDER_NAME] AS [Ordrenummer]
+                                ,SUM(ULR.[WEIGHT]) / 1000.0 AS [Kilo ristet]
+								,S.[Antal samples], S.[Farve gl], S.[Farve ny], S.[L vand]
+								,S.[Slut temp], S.[Vandpct]
+                                FROM [dbo].[PRO_EXP_ORDER_UNLOAD_R] AS ULR
+								LEFT JOIN SAMPLES AS S
+									ON ULR.[ORDER_NAME] = S.[ORDER_NAME]
+                                WHERE ULR.[ORDER_NAME] IN ({sql_roast_orders})
+                                GROUP BY DATEADD(D, DATEDIFF(D, 0, ULR.[RECORDING_DATE] ), 0)
+                                ,ULR.[DEST_NAME] ,ULR.[ORDER_NAME]
+								,S.[Antal samples], S.[Farve gl], S.[Farve ny], S.[L vand]
+								,S.[Slut temp], S.[Vandpct] """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
         df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
@@ -537,16 +553,21 @@ def initiate_report(initiate_id):
     section_id = 5
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Varenummer','Varenavn','Dato','Rister','Ordrenummer','Silo',
-                    'Kilo råkaffe','Heraf kontrakt','Kilo ristet']
-    columns_1_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet']
+                    'Kilo råkaffe','Heraf kontrakt','Kilo ristet','Farve gl',
+                    'Farve ny','Vandpct','Antal samples','L vand','Slut temp']
+    columns_1_dec = ['Kilo råkaffe','Heraf kontrakt','Kilo ristet','Farve gl',
+                     'Farve ny','L vand','Slut temp']
+    columns_2_pct = ['Vandpct']
     columns_strip = ['Dato','Silo']
 
-    if ssf.get_section_status_code(df_probat_roast_output) == 99:
+    if ssf.get_section_status_code(df_probat_roast_input) == 99:
         try:
             # Apply column formating for date column before concat
             df_probat_roast_output['Dato'] = df_probat_roast_output['Dato'].dt.strftime('%d-%m-%Y')
             # Concat dates into one strng and sum numeric columns if they can be grouped
-            df_probat_roast_output = df_probat_roast_output.groupby('Ordrenummer').agg(
+            df_probat_roast_output = df_probat_roast_output.groupby(['Ordrenummer','Farve gl',
+                                                                     'Farve ny','Vandpct','Antal samples',
+                                                                     'L vand','Slut temp']).agg(
                 {'Kilo ristet': 'sum',
                  'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                  'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
@@ -568,12 +589,14 @@ def initiate_report(initiate_id):
                                      'Heraf kontrakt': df_probat_roast_total['Heraf kontrakt'].sum(),
                                      'Kilo ristet': df_probat_roast_total['Kilo ristet'].sum()
                                      }
-
             # Create temp dataframe including total
             df_temp_total = pd.concat([df_probat_roast_total,
                                    pd.DataFrame([dict_risteordrer_total])])
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            for col in columns_2_pct:
+                df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
+            df_temp_total.replace({'nan': None, 'nan%': None}, inplace=True)
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
             # Write results to Excel

@@ -435,13 +435,14 @@ def initiate_report(initiate_id):
     section_id = 1
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Kontraktnummer','Modtagelse','Varenummer','Varenavn','Mærkningsordning','Oprindelsesland',
-                    'Leverandørnummer','Leverandørnavn','Silobeholdning eksporteret']
+                    'Leverandørnummer','Leverandørnavn','Godkendt på id','Silobeholdning eksporteret']
 
     if ssf.get_section_status_code(df_nav_generelt) == 99:
         try:
             df_nav_generelt['Kontraktnummer'] = req_reference_no
             df_nav_generelt['Modtagelse'] = req_modtagelse
             df_nav_generelt['Silobeholdning eksporteret'] = df_probat_inventory_timestamp['Silobeholdning eksporteret'].iloc[0]
+            df_nav_generelt['Godkendt på id'] = ssf.get_contract_delivery_approval_id(req_reference_no, req_modtagelse)
             # Apply column formating
             df_nav_generelt['Silobeholdning eksporteret'] = df_nav_generelt['Silobeholdning eksporteret'].dt.strftime('%d-%m-%Y %H:%M')
             # Transpose dataframe

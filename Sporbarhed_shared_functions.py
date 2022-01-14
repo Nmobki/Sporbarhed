@@ -346,7 +346,8 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
     """ Returns the first ID from BKI_Datastore on which a given contract/delivery
         has been approved on. \n Returns None if no approved ID can be found. 
         If None is input as delivery the first approval of contract is returned,
-        regardless of any deliveries."""
+        regardless of any deliveries.
+        Only 'modtagelseskontrol' is included in results. """
     query_del = f""" SELECT	MIN(S.[Id]) AS [Id]
                 FROM [cof].[Risteri_råkaffe_planlægning] AS RRP
                 INNER JOIN [cof].[Risteri_modtagelse_registrering] AS RMR
@@ -357,7 +358,8 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
                 	AND S.[Id_org_kildenummer] = 1
                 WHERE RRP.[Kontraktnummer] = '{contract}'
                 	AND RRP.[Delivery] = '{delivery}'
-                	AND S.[Status] = 1 """
+                	AND S.[Status] = 1
+                    ANS S.[Smagningstype] = 0"""
     
     query_no_del = f""" SELECT MAX([Id]) AS [Id] FROM [cof].[Smageskema]
                         WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0

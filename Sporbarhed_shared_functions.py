@@ -360,7 +360,8 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
                 	AND S.[Status] = 1 """
     
     query_no_del = f""" SELECT MAX([Id]) AS [Id] FROM [cof].[Smageskema]
-                        WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0 """
+                        WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0
+                        AND [Status] = 1 """
     if delivery is None:
         df = pd.read_sql(query_no_del, con_ds)
     else:

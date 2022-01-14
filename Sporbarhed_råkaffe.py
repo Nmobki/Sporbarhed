@@ -140,34 +140,34 @@ def initiate_report(initiate_id):
                               SELECT [DESTINATION] AS [Silo]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
                               ,SUM([WEIGHT] / 10.0) AS [Kilo]
-                              ,0 AS [Restlager]
+                              ,0 AS [Restlager], [CUSTOMER_CODE] AS [Sortnummer]
                               FROM [dbo].[PRO_EXP_REC_SUM_DEST]
                               WHERE [CONTRACT_NO] = '{req_reference_no}' AND [DESTINATION] LIKE '2__'
-                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
+                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0), [CUSTOMER_CODE]
                               UNION ALL
-                              SELECT [Placering] ,NULL ,0 ,SUM([Kilo])
+                              SELECT [Placering] ,NULL ,0 ,SUM([Kilo]),[Varenummer] AS [Sortnummer]
                               FROM [dbo].[Newest total inventory]
                               WHERE [Kontrakt] = '{req_reference_no}' AND [Placering]  LIKE '2__'
-                              GROUP BY [Placering]
+                              GROUP BY [Placering],[Varenummer]
                               END
                               IF '{req_modtagelse}' <> 'None' -- Modtagelse tastet
                               BEGIN
                               SELECT [DESTINATION] AS [Silo]
                               ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ), 0) AS [Dato]
                               ,SUM([WEIGHT] / 10.0) AS [Kilo]
-                              ,0 AS [Restlager]
+                              ,0 AS [Restlager], [CUSTOMER_CODE] AS [Sortnummer]
                               FROM [dbo].[PRO_EXP_REC_SUM_DEST]
                               WHERE [CONTRACT_NO] = '{req_reference_no}'
                               AND [DESTINATION] LIKE '2__'
                               AND [DELIVERY_NAME] = '{req_modtagelse}'
-                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0)
+                              GROUP BY [DESTINATION] ,DATEADD(D, DATEDIFF(D, 0, [START_TIME] ) ,0), [CUSTOMER_CODE]
                               UNION ALL
                               SELECT [Placering] ,NULL ,0
-                              ,SUM([Kilo]) AS [Kilo]
+                              ,SUM([Kilo]) AS [Kilo],[Varenummer] AS [Sortnummer]
                               FROM [dbo].[Newest total inventory]
                               WHERE [Kontrakt] = '{req_reference_no}' AND [Placering]  LIKE '2__'
                               AND [Modtagelse] = '{req_modtagelse}'
-                              GROUP BY [Placering]
+                              GROUP BY [Placering],[Varenummer]
                               END """
     df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
 
@@ -257,11 +257,11 @@ def initiate_report(initiate_id):
     if len(sql_roast_orders) > 0:
         df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
     else:
-        df_probat_grinding_input = pd.DataFrame()
+        df_probat_grinding_input = pd.DataFrame(columns=['Ordrenummer'])
 
     # Convert orders to string for use in grinder output query
-    grinder_orders = df_probat_grinding_input['Ordrenummer'].unique().tolist()
-    sql_grinder_orders = ssf.string_to_sql(grinder_orders)
+    grinder_orders = df_probat_grinding_input['Ordrenummer'].unique().tolist() if len(df_probat_grinding_input) > 0 else ["\'\'"]
+    sql_grinder_orders = ssf.string_to_sql(grinder_orders) if grinder_orders else "\'\'"
 
     # Get output from grinders
     query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
@@ -367,11 +367,11 @@ def initiate_report(initiate_id):
     # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
     nav_lotnots_total_sql_string = ssfg.get_nav_lotnos_from_orders(req_orders_total, 'string')
     # Get information about each production order based on lotnumbers identified above
-    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string)
+    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame()
     # Get information about any sales to any customers based on lotnumbers identified above
-    df_nav_debitorer = ssfg.get_sales_information(nav_lotnots_total_sql_string)
+    df_nav_debitorer = ssfg.get_sales_information(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame()
     # Get relationship between requested order and any orders which have used it as components, based on lotnumbers identified above
-    df_nav_orders = ssfg.get_order_relationship(nav_lotnots_total_sql_string)
+    df_nav_orders = ssfg.get_order_relationship(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame()
 
     # Query to get karakterer saved in BKI_Datastore
     query_ds_karakterer = f""" IF '{req_modtagelse}' = 'None'
@@ -493,7 +493,7 @@ def initiate_report(initiate_id):
     # =============================================================================
     section_id = 20
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = ['Silo','Dato','Kilo','Restlager']
+    column_order = ['Silo','Dato','Sortnummer','Sortnavn','Kilo','Restlager']
     columns_1_dec = ['Kilo','Restlager']
     columns_strip = ['Dato']
 
@@ -503,12 +503,14 @@ def initiate_report(initiate_id):
             df_probat_processing['Dato'] = df_probat_processing['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_processing.fillna('', inplace=True)
             #Concat dates into one strng and sum numeric columns if they can be grouped
-            df_probat_processing = df_probat_processing.groupby('Silo').agg(
+            df_probat_processing = df_probat_processing.groupby(['Silo','Sortnummer']).agg(
                 {'Kilo': 'sum',
                  'Restlager': 'sum',
                  'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
                  }).reset_index()
-            # Remove trailing an dleading commas from strings
+            # Add item name
+            df_probat_processing['Sortnavn'] = df_probat_processing['Sortnummer'].apply(ssf.get_nav_item_info, field='Beskrivelse')
+            # Remove trailing and leading commas from strings
             for col in columns_strip:
                 df_probat_processing[col] = df_probat_processing[col].apply(lambda x: ssf.strip_comma_from_string(x))
             # Create total for dataframe

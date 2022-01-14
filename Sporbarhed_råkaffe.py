@@ -280,12 +280,24 @@ def initiate_report(initiate_id):
     sql_grinder_orders = ssf.string_to_sql(grinder_orders) if grinder_orders else "\'\'"
 
     # Get output from grinders
-    query_probat_grinding_output = f""" SELECT [ORDER_NAME] AS [Ordrenummer]
-                                   ,SUM([WEIGHT] / 1000.0) AS [Kilo]
-                                   ,[DEST_NAME] AS [Silo]
-                                   FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
-                                   WHERE [ORDER_NAME] IN ({sql_grinder_orders})
-                                   GROUP BY [ORDER_NAME],[DEST_NAME] """
+    query_probat_grinding_output = f""" WITH SAMPLES AS ( SELECT [ORDER_NAME] ,AVG([SIEVE_1] / 100.0) AS [Si 1]
+                                    ,AVG([SIEVE_2] / 100.0) AS [Si 2] ,AVG([SIEVE_3] / 100.0) AS [Si 3]
+                                    ,AVG([BUND] / 100.0) AS [Bund]
+                                    FROM [dbo].[PRO_EXP_SAMPLE_GRINDER]
+                                    WHERE [ORDER_NAME] IN ({sql_grinder_orders})
+                                    	AND [PRO_EXPORT_GENERAL_ID] IN ( SELECT MAX([PRO_EXPORT_GENERAL_ID]) 
+                                                                     FROM [dbo].[PRO_EXP_SAMPLE_GRINDER] GROUP BY [SAMPLE_ID])
+                                    GROUP BY [ORDER_NAME] )
+            						SELECT ULG.[ORDER_NAME] AS [Ordrenummer]
+                                   ,SUM(ULG.[WEIGHT] / 1000.0) AS [Kilo]
+                                   ,ULG.[DEST_NAME] AS [Silo]
+								   ,S.[Si 1], S.[Si 2], S.[Si 3], S.[Bund]
+                                   FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G] AS ULG
+								    LEFT JOIN SAMPLES AS S
+									ON ULG.[ORDER_NAME] = S.[ORDER_NAME]
+                                   WHERE ULG.[ORDER_NAME] IN ({sql_grinder_orders})
+                                   GROUP BY ULG.[ORDER_NAME],ULG.[DEST_NAME]
+								   ,S.[Si 1], S.[Si 2], S.[Si 3], S.[Bund] """
     # Only try to read query if any orders exist
     if len(sql_grinder_orders) > 0:
         df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
@@ -519,7 +531,7 @@ def initiate_report(initiate_id):
             df_probat_processing['Dato'] = df_probat_processing['Dato'].dt.strftime('%d-%m-%Y')
             df_probat_processing.fillna('', inplace=True)
             #Concat dates into one strng and sum numeric columns if they can be grouped
-            df_probat_processing = df_probat_processing.groupby(['Silo','Sortnummer']).agg(
+            df_probat_processing = df_probat_processing.groupby(['Silo','Sortnummer'],dropna=False).agg(
                 {'Kilo': 'sum',
                  'Restlager': 'sum',
                  'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
@@ -567,7 +579,7 @@ def initiate_report(initiate_id):
             # Concat dates into one strng and sum numeric columns if they can be grouped
             df_probat_roast_output = df_probat_roast_output.groupby(['Ordrenummer','Farve gl',
                                                                      'Farve ny','Vandpct','Antal samples',
-                                                                     'L vand','Slut temp']).agg(
+                                                                     'L vand','Slut temp'],dropna=False).agg(
                 {'Kilo ristet': 'sum',
                  'Dato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                  'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
@@ -596,7 +608,7 @@ def initiate_report(initiate_id):
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
             for col in columns_2_pct:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
-            df_temp_total.replace({'nan': None, 'nan%': None}, inplace=True)
+                df_temp_total.replace({'nan': None, 'nan%': None}, inplace=True)
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
             # Write results to Excel
@@ -613,8 +625,9 @@ def initiate_report(initiate_id):
     # =============================================================================
     section_id = 4
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = ['Varenummer','Varenavn','Ordrenummer','Dato','Silo','Kilo']
-    columns_1_dec = ['Kilo']
+    column_order = ['Varenummer','Varenavn','Ordrenummer','Dato','Silo','Kilo',
+                    'Si 1','Si 2','Si 3','Bund']
+    columns_1_dec = ['Kilo','Si 1', 'Si 2', 'Si 3', 'Bund']
     columns_strip = ['Dato','Silo']
 
     if ssf.get_section_status_code(df_probat_grinding_input) == 99:
@@ -625,7 +638,8 @@ def initiate_report(initiate_id):
             df_probat_grinding_input = df_probat_grinding_input.groupby(['Ordrenummer','Varenummer','Mølle']).agg(
                 {'Dato': lambda x: ','.join(sorted(pd.Series.unique(x)))
                 }).reset_index()
-            df_probat_grinding_output = df_probat_grinding_output.groupby('Ordrenummer').agg(
+            df_probat_grinding_output = df_probat_grinding_output.groupby(['Ordrenummer','Si 1','Si 2',
+                                                                           'Si 3','Bund'],dropna=False).agg(
                 {'Kilo': 'sum',
                  'Silo': lambda x: ','.join(sorted(pd.Series.unique(x)))
                 }).reset_index()
@@ -643,12 +657,12 @@ def initiate_report(initiate_id):
             df_probat_grinding_total['Varenavn'] = df_probat_grinding_total['Varenummer'].apply(ssf.get_nav_item_info, field='Beskrivelse')
             # Create total for dataframe
             dict_mølleordrer_total = {'Kilo': df_probat_grinding_total['Kilo'].sum()}
-
             # Create temp dataframe including total
             df_temp_total = pd.concat([df_probat_grinding_total,
                                    pd.DataFrame([dict_mølleordrer_total])])
             for col in columns_1_dec:
                 df_temp_total[col] = df_temp_total[col].apply(lambda x: ssf.number_format(x, 'dec_1'))
+            df_temp_total.replace({'nan': None}, inplace=True)
             df_temp_total = df_temp_total[column_order]
             df_temp_total.sort_values(by=['Varenummer'] ,inplace=True)
             # Write results to Excel

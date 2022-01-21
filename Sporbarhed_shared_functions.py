@@ -359,7 +359,7 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
                 WHERE RRP.[Kontraktnummer] = '{contract}'
                 	AND RRP.[Delivery] = '{delivery}'
                 	AND S.[Status] = 1
-                    ANS S.[Smagningstype] = 0"""
+                    AND S.[Smagningstype] = 0"""
     
     query_no_del = f""" SELECT MAX([Id]) AS [Id] FROM [cof].[Smageskema]
                         WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0

@@ -439,8 +439,8 @@ def initiate_report(initiate_id):
     query_probat_gc_samples = f""" IF '{req_modtagelse}' = 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
-                            ,[HUMIDITY_1] / 100000.0 AS [Vandprocent 1],[HUMIDITY_2] / 100000.0 AS [Vandprocent 2]
-                            ,[HUMIDITY_3] / 100000.0 AS [Vandprocent 3],[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
+                            ,[HUMIDITY_1] / 10000.0 AS [Vandprocent 1],[HUMIDITY_2] / 10000.0 AS [Vandprocent 2]
+                            ,[HUMIDITY_3] / 10000.0 AS [Vandprocent 3],[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
                             FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
                             WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])
                             	AND [CONTRACT_NO] = '{req_reference_no}'
@@ -448,8 +448,8 @@ def initiate_report(initiate_id):
                             IF '{req_modtagelse}' <> 'None'
                             BEGIN
                             SELECT [RECORDING_DATE] AS [Dato],[SAMPLE_ID] AS [Probat id],[VOLUME] AS [Volumen]
-                            ,[HUMIDITY_1] / 100000.0 AS [Vandprocent 1],[HUMIDITY_2] / 100000.0 AS [Vandprocent 2]
-                            ,[HUMIDITY_3] / 100000.0 AS [Vandprocent 3]
+                            ,[HUMIDITY_1] / 10000.0 AS [Vandprocent 1],[HUMIDITY_2] / 10000.0 AS [Vandprocent 2]
+                            ,[HUMIDITY_3] / 10000.0 AS [Vandprocent 3]
                             ,[USERNAME] AS [Bruger],[INFO] AS [Bemærkning]
                             FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING]
                             WHERE [PRO_EXPORT_GENERAL_ID] IN (SELECT MAX([PRO_EXPORT_GENERAL_ID]) FROM [dbo].[PRO_EXP_SAMPLE_RECEIVING] GROUP BY [SAMPLE_ID])

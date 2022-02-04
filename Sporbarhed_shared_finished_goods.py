@@ -154,8 +154,11 @@ def get_order_relationship(lotnumbers: str):
                                   ON ILE.[Lot No_] = DO.[Lot No_]
                               LEFT JOIN [DOC_CONS] AS DC
                                   ON ILE.[Lot No_] = DC.[Lot No_]
+							  INNER JOIN [dbo].[BKI foods a_s$Production Order] AS PO
+							      ON DC.[Document No_] = PO.[No_]
                               WHERE DC.[Document No_] IS NOT NULL
+							  AND PO.[Source No_] NOT IN ('10401401','10401403','10502401','10502403')
 							  AND ILE.[Lot No_] IN ({lotnumbers})
-                              GROUP BY DO.[Document No_] ,DC.[Document No_] """
+                              GROUP BY DO.[Document No_] ,DC.[Document No_],PO.[Source No_]"""
     return pd.read_sql(query, con_nav)
     

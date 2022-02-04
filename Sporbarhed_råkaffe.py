@@ -395,7 +395,7 @@ def initiate_report(initiate_id):
     # Get a string with all lotnumbers produced directly or indirectly using any of the identified orders
     nav_lotnots_total_sql_string = ssfg.get_nav_lotnos_from_orders(req_orders_total, 'string')
     # Get information about each production order based on lotnumbers identified above
-    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame()
+    df_nav_færdigvaretilgang = ssfg.get_production_information(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame(columns=['Produceret','Salg','Regulering & ompak','Restlager'])
     # Get information about any sales to any customers based on lotnumbers identified above
     df_nav_debitorer = ssfg.get_sales_information(nav_lotnots_total_sql_string) if nav_lotnots_total_sql_string else pd.DataFrame()
     # Get relationship between requested order and any orders which have used it as components, based on lotnumbers identified above
@@ -892,6 +892,7 @@ def initiate_report(initiate_id):
         except Exception as e: # Insert error into log
             ssf.section_log_insert(req_id, section_id, 2, e)
     else: # Write into log if no data is found or section is out of scope
+        ssf.create_image_from_binary_string(path_png_relations)
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_temp_orders))
 
     # =============================================================================

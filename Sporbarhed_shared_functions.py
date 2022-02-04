@@ -388,5 +388,16 @@ def get_email_subject(request_reference: str, request_type: int) -> str:
     }
     return str(dict_email_subject[request_type])
 
-
+# Create an empty image. Quick and dirty fix to prevent errors when sending email with report
+def create_image_from_binary_string(complete_path: str):
+    """
+    Creates an empty .png image. This is a quick-and-dirty work arround to prevent
+    Power automate from erroring out when trying to send a report without an image attached.
+    Parameters
+    ----------
+    complete_path : str
+        Complete path and name for placeholder image.
+    """
+    with open(complete_path, 'wb') as f:
+        f.write('axs123naxmq')
 

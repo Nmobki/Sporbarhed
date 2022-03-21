@@ -836,15 +836,15 @@ def initiate_report(initiate_id):
             # Get additional columns through functions
             df_rework['Varenummer'] = df_rework['Produktionsordre'].apply((lambda x: ssf.get_nav_order_info(x)))
             df_rework['Varenavn'] = df_rework['Varenummer'].apply((lambda x: ssf.get_nav_item_info(x, 'Beskrivelse')))
-            df_rework['Kilde varenummer'] = df_rework['Produktionsordre'].apply((lambda x: ssf.get_nav_order_info(x)))
-            df_rework['Kilde varenavn'] = df_rework['Varenummer'].apply((lambda x: ssf.get_nav_item_info(x, 'Beskrivelse')))
+            df_rework['Indhold varenummer'] = df_rework['Produktionsordre'].apply((lambda x: ssf.get_nav_order_info(x)))
+            df_rework['Indhold varenavn'] = df_rework['Varenummer'].apply((lambda x: ssf.get_nav_item_info(x, 'Beskrivelse')))
             # Concat kilde to one string if multiple and remove any trailing or leading commas
             df_rework = df_rework.groupby(['Varenummer','Varenavn','Produktionsordre','Indhold','Indhold varenummer','Indhold varenavn','Silo']).agg(
                 {'Kilde': lambda x: ','.join(sorted(pd.Series.unique(x)))}).reset_index()
             for col in columns_strip:
                 df_rework[col] = df_rework[col].apply(lambda x: ssf.strip_comma_from_string(x))
             # Write results to Excel
-            ssf.insert_dataframe_into_excel(excel_writer, df_temp_total, section_name, False)
+            ssf.insert_dataframe_into_excel(excel_writer, df_rework, section_name, False)
             # Write status into log
             ssf.section_log_insert(req_id, section_id, 0)
         except Exception as e: # Insert error into log

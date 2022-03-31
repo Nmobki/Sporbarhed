@@ -157,7 +157,7 @@ def initiate_report(initiate_id):
     df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_ds)
 
     # Primary packaging material - valve for bag
-    query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer]
+    query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer], [Registreringstidspunkt]
                       FROM [cof].[Ventil_registrering]
                       WHERE [Ordrenummer] = '{req_reference_no}' """
     df_ds_ventil = pd.read_sql(query_ds_ventil, con_ds)
@@ -356,6 +356,7 @@ def initiate_report(initiate_id):
                            ,CAST(POAC.[Roll Lenght] AS INT) AS [Rullelængde]
                            ,POAC.[Batch_Lot No_] AS [Lotnummer]
                            ,POAC.[Packaging Date] AS [Pakkedato]
+                           ,POAC.[Scanned Date] AS [Registreringstidspunkt]
                            FROM [dbo].[BKI foods a_s$Prod_ Order Add_ Comp_] (NOLOCK) AS POAC
                            INNER JOIN [dbo].[BKI foods a_s$Prod_ Order Component] (NOLOCK) AS POC
                                ON POAC.[Prod_ Order No_] = POC.[Prod_ Order No_]
@@ -1032,7 +1033,7 @@ def initiate_report(initiate_id):
     section_id = 14
     section_name = ssf.get_section_name(section_id, df_sections)
     column_order = ['Varenummer','Varenavn','Lotnummer','Rullenummer','Rullelængde',
-                    'Pakkedato','Købsordre']
+                    'Pakkedato','Købsordre','Registreringstidspunkt']
 
     if ssf.get_section_status_code(df_nav_components) == 99:
         try:
@@ -1117,7 +1118,7 @@ def initiate_report(initiate_id):
                     'Mærkning', 'Rygsvejsning', 'Tæthed', 'Ventil', 'Peelbar',
                     'Tintie', 'Vægt', 'Ilt']
     columns_2_dec = ['Vægt']
-    columns_0_pct = ['Ilt']
+    columns_2_pct = ['Ilt']
     df_temp = df_prøver[df_prøver['Prøvetype int'] == 0]
 
     if ssf.get_section_status_code(df_temp) == 99:
@@ -1128,8 +1129,8 @@ def initiate_report(initiate_id):
             for col in columns_2_dec:
                 df_temp[col] = df_temp[col].apply(lambda x: ssf.number_format(x, 'dec_2'))
             # Data formating
-            for col in columns_0_pct:
-                df_temp[col] = df_temp[col].apply(lambda x: ssf.number_format(x, 'pct_0'))
+            for col in columns_2_pct:
+                df_temp[col] = df_temp[col].apply(lambda x: ssf.number_format(x, 'pct_2'))
             # Write results to Excel
             ssf.insert_dataframe_into_excel(excel_writer, df_temp, section_name, False)
             # Write status into log
@@ -1161,6 +1162,7 @@ def initiate_report(initiate_id):
 
     #Save files
     excel_writer.save()
+    excel_writer.close()
     ssf.log_insert(script_name, f'Excel file {file_name} created')
 
     # =============================================================================

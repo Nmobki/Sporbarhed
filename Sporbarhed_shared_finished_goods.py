@@ -66,10 +66,12 @@ def get_production_information(lotnumbers: str):
     Pandas Dataframe
     """
     query = f""" WITH [LOT_SINGLE] AS ( SELECT [Lot No_], [Document No_] AS [Ordrenummer]
+                                    ,[Expiration Date] AS [Udløbsdato]
                               FROM [dbo].[BKI foods a_s$Item Ledger Entry] (NOLOCK) 
 							  WHERE [Entry Type] IN (6,9)
-							  GROUP BY [Lot No_], [Document No_])
-                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn], LOT_SINGLE.[Ordrenummer]
+							  GROUP BY [Lot No_], [Document No_], [Expiration Date])
+                              SELECT ILE.[Item No_] AS [Varenummer],I.[Description] AS [Varenavn]
+                                  ,LOT_SINGLE.[Ordrenummer] ,LOT_SINGLE.[Udløbsdato]
                         	  ,SUM(CASE WHEN ILE.[Entry Type] IN (0,6,9)
                         		THEN ILE.[Quantity] * I.[Net Weight]
                         		ELSE 0 END) AS [Produceret]
@@ -86,7 +88,8 @@ def get_production_information(lotnumbers: str):
                             INNER JOIN [LOT_SINGLE]
                             	ON ILE.[Lot No_] = [LOT_SINGLE].[Lot No_]
 							WHERE ILE.[Lot No_] IN ({lotnumbers})
-                            GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer] """
+                            GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer]
+                                ,LOT_SINGLE.[Udløbsdato]"""
     return pd.read_sql(query, con_nav)
 
 # Get information about any sales to any customers based on input list of lotnumbers.

@@ -600,15 +600,17 @@ def initiate_report(initiate_id):
     # =============================================================================
     section_id = 3
     section_name = ssf.get_section_name(section_id, df_sections)
-    column_order = ['Varenummer','Varenavn','Ordrenummer','Produceret','Salg','Restlager','Regulering & ompak']
+    column_order = ['Varenummer','Varenavn','Ordrenummer','Udløbsdato','Produceret','Salg','Restlager','Regulering & ompak']
     columns_1_dec = ['Produceret','Salg','Restlager','Regulering & ompak']
-    columns_strip = ['Ordrenummer']
+    columns_strip = ['Ordrenummer','Udløbsdato']
 
     if ssf.get_section_status_code(df_nav_færdigvaretilgang) == 99:
         try:
+            df_nav_færdigvaretilgang['Udløbsdato'] = df_nav_færdigvaretilgang['Udløbsdato'].dt.strftime('%d-%m-%Y')
             # Concat order numbers to one string
             df_nav_færdigvaretilgang = df_nav_færdigvaretilgang.groupby(['Varenummer','Varenavn']).agg(
                {'Ordrenummer': lambda x: ','.join(sorted(pd.Series.unique(x))),
+                'Udløbsdato': lambda x: ','.join(sorted(pd.Series.unique(x))),
                 'Produceret': 'sum',
                 'Salg': 'sum',
                 'Restlager': 'sum',

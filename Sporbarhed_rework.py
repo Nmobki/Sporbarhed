@@ -7,16 +7,10 @@ import networkx as nx
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_rework as ssr
 import Sporbarhed_shared_finished_goods as ssfg
+import Sporbarhed_shared_server_information as sssi
 
 
 def initiate_report(initiate_id):
-    # =============================================================================
-    # Variables for query connections
-    # =============================================================================
-    con_ds = ssf.get_connection('bki_datastore')
-    cursor_ds = ssf.get_cursor('bki_datastore')
-    engine_ds = ssf.get_engine('bki_datastore')
-    con_probat = ssf.get_connection('probat')
 
     # =============================================================================
     # Read data from request
@@ -25,7 +19,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_ds)
+    df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
     # Exit script if no request data is found
     ssf.get_exit_check(len(df_request))
@@ -53,7 +47,7 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = ssf.get_filepath('report')
+    filepath = sssi.report_filepath
     file_name = f'Rapport_{req_reference_no}_{req_id}'
 
     wb_name = f'{file_name}.xlsx'
@@ -66,10 +60,9 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
@@ -162,7 +155,7 @@ def initiate_report(initiate_id):
                                    FROM [dbo].[PRO_EXP_ORDER_UNLOAD_G]
                                    WHERE [ORDER_NAME] IN ({rework_orders})
                                    GROUP BY [ORDER_NAME] """
-            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
+            df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, sssi.con_probat)
             # Join to input
             df_rework_used_in = pd.merge(df_rework_used_in,
                                          df_probat_grinding_output,
@@ -210,7 +203,7 @@ def initiate_report(initiate_id):
                                         WHERE [ORDER_NAME] <> ''
                                         	AND [S_ORDER_NAME] IN ({rework_orders})
                                         GROUP BY [ORDER_NAME],[S_ORDER_NAME] """
-    df_probat_order_relations = pd.read_sql(query_probat_order_relations, con_probat)
+    df_probat_order_relations = pd.read_sql(query_probat_order_relations, sssi.con_probat)
     df_nav_order_relations = ssf.get_nav_orders_from_related_orders(rework_orders)
     # Concat lists and convert list of orders to string used for sql
     order_numbers_fg_sql = ssf.extend_order_list(req_ordrelationstype, [],
@@ -449,16 +442,15 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET Data_færdigbehandlet = 1
                       WHERE [Id] = {req_id}""")
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script

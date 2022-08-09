@@ -7,19 +7,10 @@ import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_rework as ssr
 import Sporbarhed_shared_finished_goods as ssfg
 import Sporbarhed_shared_silo_layers as sssl
+import Sporbarhed_shared_server_information as sssi
 
 
 def initiate_report(initiate_id):
-
-    # =============================================================================
-    # Variables for query connections
-    # =============================================================================
-    con_ds = ssf.get_connection('bki_datastore')
-    cursor_ds = ssf.get_cursor('bki_datastore')
-    engine_ds = ssf.get_engine('bki_datastore')
-    con_nav = ssf.get_connection('navision')
-    con_probat = ssf.get_connection('probat')
-    con_comscale = ssf.get_connection('comscale')
 
     # =============================================================================
     # Read data from request
@@ -28,7 +19,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_ds)
+    df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
     # Exit script if no request data is found
     ssf.get_exit_check(len(df_request))
@@ -52,16 +43,15 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = ssf.get_filepath('report')
+    filepath = sssi.report_filepath
     file_name = f'Rapport_{req_reference_no}_{req_id}'
 
     wb_name = f'{file_name}.xlsx'
@@ -99,7 +89,7 @@ def initiate_report(initiate_id):
                         LEFT JOIN [SK] 
                             ON SF.[Referencenummer] = SK.[Referencenummer]
                         WHERE SF.[Id] = {req_id} """
-    df_results_generelt = pd.read_sql(query_ds_generelt, con_ds)
+    df_results_generelt = pd.read_sql(query_ds_generelt, sssi.con_ds)
 
     production_machine = df_results_generelt['Pakkelinje'].iloc[0]
 
@@ -131,7 +121,7 @@ def initiate_report(initiate_id):
                            ON KP.[Id] = SK.[Id_org]
                            AND SK.[Id_org_kildenummer] = 6
                        WHERE KP.[Ordrenummer] = '{req_reference_no}' """
-    df_prøver = pd.read_sql(query_ds_samples, con_ds)
+    df_prøver = pd.read_sql(query_ds_samples, sssi.con_ds)
 
     # All grades given for the requested order. Coalesce is to ensure that query
     # returns no results if record exists but no grades have been given
@@ -143,7 +133,7 @@ def initiate_report(initiate_id):
                               AND [Referencenummer] = '{req_reference_no}'
                               AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
                                 [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
-    df_karakterer = pd.read_sql(query_ds_karakterer, con_ds)
+    df_karakterer = pd.read_sql(query_ds_karakterer, sssi.con_ds)
 
     # If lotnumbers from requested order have been checked for leakage the information
     # from the check is returned with this query. Will often return no results
@@ -154,13 +144,13 @@ def initiate_report(initiate_id):
     				   ,CASE WHEN [Overført_email_log] = 1 THEN
     				   'Over grænseværdi' ELSE 'Ok' END AS [Resultat af kontrol]
                        FROM [cof].[Vac_slip] """
-    df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_ds)
+    df_ds_vacslip = pd.read_sql(query_ds_vacslip, sssi.con_ds)
 
     # Primary packaging material - valve for bag
     query_ds_ventil = f""" SELECT [Varenummer] ,[Batchnr_stregkode] AS [Lotnummer], [Registreringstidspunkt]
                       FROM [cof].[Ventil_registrering]
                       WHERE [Ordrenummer] = '{req_reference_no}' """
-    df_ds_ventil = pd.read_sql(query_ds_ventil, con_ds)
+    df_ds_ventil = pd.read_sql(query_ds_ventil, sssi.con_ds)
 
     # Order statistics from Comscale. Only for good bags (trade)
     query_com_statistics = f""" WITH CTE AS ( SELECT SD.[Nominal] ,SD.[Tare]
@@ -181,7 +171,7 @@ def initiate_report(initiate_id):
                            ,CTE.[Total vægt] - CTE.[Nominal] * CTE.[Antal poser] AS [Godvægt total g]
                            ,CTE.[Nominal] AS [Nominel vægt g],CTE.[Tare] AS [Taravægt g]
                            FROM CTE """
-    df_com_statistics = pd.read_sql(query_com_statistics, con_comscale)
+    df_com_statistics = pd.read_sql(query_com_statistics, sssi.con_comscale)
 
     # Query to pull various information from Navision for the requested order.
     query_nav_generelt = f""" WITH [RECEPT] AS (
@@ -224,7 +214,7 @@ def initiate_report(initiate_id):
                          LEFT JOIN [RECEPT] ON PO.[No_] = RECEPT.[Prod_ Order No_]
                          LEFT JOIN [ILE] ON PO.[No_] = ILE.[Order No_]
                          WHERE I.[Item Category Code] = 'FÆR KAFFE' AND PO.[No_] = '{req_reference_no}' """
-    df_nav_generelt = pd.read_sql(query_nav_generelt, con_nav)
+    df_nav_generelt = pd.read_sql(query_nav_generelt, sssi.con_nav)
 
     if len(df_nav_generelt) == 0:
         production_date = ''
@@ -241,7 +231,7 @@ def initiate_report(initiate_id):
                            WHERE SP.[Pakkelinje] = '{production_machine}'
                            AND DATEADD(d, DATEDIFF(d, 0, V.[Registreringstidspunkt] ), 0) 
                            BETWEEN DATEADD(d,-3, '{production_date}') AND DATEADD(d, 1, '{production_date}') """
-    df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, con_ds)
+    df_ds_vægtkontrol = pd.read_sql(query_ds_vægtkontrol, sssi.con_ds)
 
     # Get any related orders identified through Probat
     # Pakkelinjer is used to find either grinding or roasting orders used directly in packaging
@@ -271,7 +261,7 @@ def initiate_report(initiate_id):
     					   WHERE [ORDER_NAME] IN (SELECT [Relateret ordre] FROM [CTE_ORDERS])
                            AND [S_ORDER_NAME] <> 'REWORK ROAST'
     					   GROUP BY [S_ORDER_NAME],[ORDER_NAME] """
-    df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
+    df_probat_orders = pd.read_sql(query_probat_orders, sssi.con_probat)
 
     # Get lists of orders and related orders (if any) from Probat, first create dataframe with top level orders:
     df_temp_top_level = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
@@ -291,7 +281,7 @@ def initiate_report(initiate_id):
                        WHERE [Reserved Prod_ Order No_] IN 
                        (SELECT [Reserved Prod_ Order No_] FROM [CTE_ORDER] )
                        AND [Invalid] = 0 """
-    df_nav_order_related = pd.read_sql(query_nav_order_related, con_nav)
+    df_nav_order_related = pd.read_sql(query_nav_order_related, sssi.con_nav)
 
     # Get list of orders and append to lists if they do not already exist
     # Merge Probat and NAV orders before merging
@@ -315,7 +305,7 @@ def initiate_report(initiate_id):
                                 	AND [ORDER_NAME] IN ({req_orders_related})
                                   GROUP BY [ORDER_NAME],[S_ORDER_NAME] """
     if len(req_orders_related) != 0:
-        df_probat_lg_to_ulr = pd.read_sql(query_probat_lg_to_ulr, con_probat)
+        df_probat_lg_to_ulr = pd.read_sql(query_probat_lg_to_ulr, sssi.con_probat)
     else:
         df_probat_lg_to_ulr = pd.DataFrame()
 
@@ -346,7 +336,7 @@ def initiate_report(initiate_id):
                       WHERE ILE.[Order Type] = 1
                     	  AND ILE.[Entry Type] = 6
                           AND ILE.[Order No_] = '{req_reference_no}' """
-    df_nav_lotno = pd.read_sql(query_nav_lotno, con_nav)
+    df_nav_lotno = pd.read_sql(query_nav_lotno, sssi.con_nav)
 
     # Primary packaging components used for the originally requested order
     query_nav_components = f""" SELECT POC.[Item No_] AS [Varenummer]
@@ -365,7 +355,7 @@ def initiate_report(initiate_id):
                            INNER JOIN [dbo].[BKI foods a_s$Item] (NOLOCK) AS I
                                ON POC.[Item No_] = I.[No_]
                            WHERE POAC.[Prod_ Order No_] = '{req_reference_no}' """
-    df_nav_components = pd.read_sql(query_nav_components, con_nav)
+    df_nav_components = pd.read_sql(query_nav_components, sssi.con_nav)
 
     # Components used for the originally requested order
     query_nav_consumption = f""" SELECT	ILE.[Item No_] AS [Varenummer]
@@ -378,7 +368,7 @@ def initiate_report(initiate_id):
                             WHERE ILE.[Order No_] = '{req_reference_no}'
                             	AND ILE.[Entry Type] = 5
                             GROUP BY ILE.[Item No_] ,I.[Description],I.[Base Unit of Measure] """
-    df_nav_consumption = pd.read_sql(query_nav_consumption, con_nav)
+    df_nav_consumption = pd.read_sql(query_nav_consumption, sssi.con_nav)
 
     q_related_orders = ssf.string_to_sql(orders_related)
 
@@ -407,7 +397,7 @@ def initiate_report(initiate_id):
                                           'Receptnummer','Silo','Kilo','Si 1','Si 2',
                                           'Si 3', 'Bund'])
     if len(q_related_orders) != 0:
-        df_probat_ulg = pd.read_sql(query_probat_ulg, con_probat)
+        df_probat_ulg = pd.read_sql(query_probat_ulg, sssi.con_probat)
 
     # Find related roasting orders from any related grinding orders
     query_probat_lg = f""" SELECT [S_ORDER_NAME]
@@ -417,7 +407,7 @@ def initiate_report(initiate_id):
                            GROUP BY	[S_ORDER_NAME] """
     df_probat_lg = pd.DataFrame(columns=['S_ORDER_NAME'])
     if len(q_related_orders) != 0:
-        df_probat_lg = pd.read_sql(query_probat_lg, con_probat)
+        df_probat_lg = pd.read_sql(query_probat_lg, sssi.con_probat)
 
     if len(df_probat_ulg) != 0: # Add to list only if dataframe is not empty
         for order in df_probat_lg['S_ORDER_NAME'].unique().tolist():
@@ -455,7 +445,7 @@ def initiate_report(initiate_id):
                                           'Ordrenummer','Kilo','Silo', 'Farve gl', 'Farve ny',
                                           'Vandpct','Antal samples','L vand','Slut temp'])
     if len(q_related_orders) != 0:
-        df_probat_ulr = pd.read_sql(query_probat_ulr, con_probat)
+        df_probat_ulr = pd.read_sql(query_probat_ulr, sssi.con_probat)
 
     # Find green coffee related to orders
     query_probat_lr = f""" WITH SAMPLES AS ( SELECT [CONTRACT_NO] ,[DELIVERY_NAME]
@@ -481,7 +471,7 @@ def initiate_report(initiate_id):
                                          'Modtagelse','Ordrenummer','Kilo',
                                          'Vandpct 1', 'Vandpct 2', 'Volumen'])
     if len(q_related_orders) != 0:
-        df_probat_lr = pd.read_sql(query_probat_lr, con_probat)
+        df_probat_lr = pd.read_sql(query_probat_lr, sssi.con_probat)
 
     # =============================================================================
     # Section 1: Generelt
@@ -1176,16 +1166,15 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET Data_færdigbehandlet = 1
                       WHERE [Id] = {req_id}""")
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script

@@ -6,11 +6,6 @@ import Sporbarhed_shared_server_information as sssi
 import Sporbarhed_shared_functions as ssf
 
 
-# =============================================================================
-# Variables for query connections
-# =============================================================================
-con_nav = sssi.con_nav
-
 # Recursive query to get lotnumbers related to any of the input orders.
 def get_nav_lotnos_from_orders(orders_string: str, return_type: str):
     """
@@ -46,7 +41,7 @@ def get_nav_lotnos_from_orders(orders_string: str, return_type: str):
 								  WHERE I.[Item Category Code] = 'FÆR KAFFE')
                               SELECT [Lot No_] AS [Lot]
                               FROM [LOT_ORG] GROUP BY [Lot No_] """
-    df = pd.read_sql(query, con_nav)
+    df = pd.read_sql(query, sssi.con_nav)
     if return_type == 'dataframe':
         return df
     elif return_type == 'string':
@@ -90,7 +85,7 @@ def get_production_information(lotnumbers: str):
 							WHERE ILE.[Lot No_] IN ({lotnumbers})
                             GROUP BY ILE.[Item No_],I.[Description], LOT_SINGLE.[Ordrenummer]
                                 ,LOT_SINGLE.[Udløbsdato]"""
-    return pd.read_sql(query, con_nav)
+    return pd.read_sql(query, sssi.con_nav)
 
 # Get information about any sales to any customers based on input list of lotnumbers.
 def get_sales_information(lotnumbers: str):
@@ -125,7 +120,7 @@ def get_sales_information(lotnumbers: str):
                       WHERE ILE.[Entry Type] = 1
 						AND ILE.[Lot No_] IN ({lotnumbers})
                       GROUP BY  C.[No_] ,C.[Name],ILE.[Posting Date],ILE.[Item No_], LOT_SINGLE.[Produktionsordrenummer] """
-    return pd.read_sql(query, con_nav)
+    return pd.read_sql(query, sssi.con_nav)
 
 def get_order_relationship(lotnumbers: str):
     """
@@ -163,5 +158,5 @@ def get_order_relationship(lotnumbers: str):
 							  AND PO.[Source No_] NOT IN ('10401401','10401403','10502401','10502403')
 							  AND ILE.[Lot No_] IN ({lotnumbers})
                               GROUP BY DO.[Document No_] ,DC.[Document No_],PO.[Source No_]"""
-    return pd.read_sql(query, con_nav)
+    return pd.read_sql(query, sssi.con_nav)
     

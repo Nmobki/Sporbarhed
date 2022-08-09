@@ -4,11 +4,6 @@
 import pandas as pd
 import Sporbarhed_shared_server_information as sssi
 
-# =============================================================================
-# Variables for query connections
-# =============================================================================
-con_probat = sssi.con_probat
-
 # Get silo layers
 def get_silo_layer(silo: str, datetime: str, contract: str, delivery: str, return_type: str, return_value: str) ->str:
     """
@@ -50,13 +45,13 @@ def get_silo_layer(silo: str, datetime: str, contract: str, delivery: str, retur
                         ORDER BY [RECORDING_DATE] DESC"""
     
     if return_type == 'next':
-        df = pd.read_sql(query_next, con_probat)
+        df = pd.read_sql(query_next, sssi.con_probat)
         if len(df) == 0:
             return ''
         else:
             return df[return_value]
     elif return_type == 'previous':
-        df = pd.read_sql(query_previous, con_probat)
+        df = pd.read_sql(query_previous, sssi.con_probat)
         if len(df) == 0:
             return ''
         else:
@@ -82,7 +77,7 @@ def get_200silo_layers_from_orders(orders: str):
                 CONVERT(NVARCHAR,[RECORDING_DATE], 20 ) AS [LR_DATO]
                 FROM [dbo].[PRO_EXP_ORDER_LOAD_R]
                 WHERE [ORDER_NAME] IN ({orders})"""
-    df = pd.read_sql(query_orders, con_probat)
+    df = pd.read_sql(query_orders, sssi.con_probat)
     df['Efterfølgende kontraktnummer'] = df.apply(lambda x: get_silo_layer(
                                             x.Silo, 
                                             x.LR_DATO, 

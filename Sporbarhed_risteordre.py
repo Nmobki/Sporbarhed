@@ -7,19 +7,10 @@ import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_rework as ssr
 import Sporbarhed_shared_finished_goods as ssfg
 import Sporbarhed_shared_silo_layers as sssl
+import Sporbarhed_shared_server_information as sssi
 
 
 def initiate_report(initiate_id):
-
-    # =============================================================================
-    # Variables for query connections
-    # =============================================================================
-    con_ds = ssf.get_connection('bki_datastore')
-    cursor_ds = ssf.get_cursor('bki_datastore')
-    engine_ds = ssf.get_engine('bki_datastore')
-    con_nav = ssf.get_connection('navision')
-    con_probat = ssf.get_connection('probat')
-
     # =============================================================================
     # Read data from request
     # =============================================================================
@@ -27,7 +18,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_ds)
+    df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
     # Exit script if no request data is found
     ssf.get_exit_check(len(df_request))
@@ -51,16 +42,15 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_ds.commit()
     # ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = ssf.get_filepath('report')
+    filepath = sssi.report_filepath
     file_name = f'Rapport_{req_order_no}_{req_id}'
 
     wb_name = f'{file_name}.xlsx'
@@ -82,7 +72,7 @@ def initiate_report(initiate_id):
                          WHERE [ORDER_NAME] = '{req_order_no}'
                          GROUP BY [S_CUSTOMER_CODE] ,DATEADD(D, DATEDIFF(D, 0, [RECORDING_DATE] ), 0)
                     	,[PRODUCTION_ORDER_ID] ,[SOURCE_NAME],[DEST_NAME] """
-    df_generelt = pd.read_sql(query_generelt, con_probat)
+    df_generelt = pd.read_sql(query_generelt, sssi.con_probat)
 
     # =============================================================================
     # Section 1: Generelt
@@ -171,7 +161,7 @@ def initiate_report(initiate_id):
                             LEFT JOIN CTE_ULR ON CTE_LR.[Batch id] = CTE_ULR.[BATCH_ID]
                             LEFT JOIN [dbo].[PRO_EXP_BATCH_DATA_ROASTER] AS BDR ON CTE_LR.[Batch id] = BDR.[BATCH_ID]
                             LEFT JOIN CTE_SAMPLES ON CTE_LR.[Batch id] = CTE_SAMPLES.[BATCH_ID] """
-    df_probat_batch = pd.read_sql(query_probat_batch, con_probat)
+    df_probat_batch = pd.read_sql(query_probat_batch, sssi.con_probat)
 
     if ssf.get_section_status_code(df_probat_batch) == 99:
         try:
@@ -229,7 +219,7 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_order_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
     # ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================

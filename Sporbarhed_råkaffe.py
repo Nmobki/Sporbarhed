@@ -5,18 +5,10 @@ import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_finished_goods as ssfg
+import Sporbarhed_shared_server_information as sssi
 
 
 def initiate_report(initiate_id):
-
-    # =============================================================================
-    # Variables for query connections
-    # =============================================================================
-    con_ds = ssf.get_connection('bki_datastore')
-    cursor_ds = ssf.get_cursor('bki_datastore')
-    engine_ds = ssf.get_engine('bki_datastore')
-    con_nav = ssf.get_connection('navision')
-    con_probat = ssf.get_connection('probat')
 
     # =============================================================================
     # Read data from request
@@ -25,7 +17,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_ds)
+    df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
     # Exit script if no request data is found
     ssf.get_exit_check(len(df_request))
@@ -50,16 +42,15 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = ssf.get_filepath('report')
+    filepath = sssi.report_filepath
     file_name = f'Rapport_{req_reference_no}_{req_id}'
     # Excel workbook
     wb_name = f'{file_name}.xlsx'
@@ -89,7 +80,7 @@ def initiate_report(initiate_id):
 							ON PH.[Pay-to Country_Region Code] = CR.[Code]
                         WHERE PL.[Type] = 2
                             AND PL.[Document No_] = '{req_reference_no}' """
-    df_nav_generelt = pd.read_sql(query__nav_generelt, con_nav)
+    df_nav_generelt = pd.read_sql(query__nav_generelt, sssi.con_nav)
 
     # Get timestamp for last export of inventory from Probat
     query_probat_inventory_timestamp = """ WITH [Tables] AS (
@@ -100,7 +91,7 @@ def initiate_report(initiate_id):
                                         FROM [dbo].[PRO_EXP_WAREHOUSE_INVENTORY] )
                                         SELECT MIN([Date]) AS [Silobeholdning eksporteret]
                                         FROM [Tables] """
-    df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, con_probat)
+    df_probat_inventory_timestamp = pd.read_sql(query_probat_inventory_timestamp, sssi.con_probat)
 
     # Information from Probat for the receiving of coffee
     query_probat_receiving = f""" IF '{req_modtagelse}' = 'None' -- Modtagelse ikke tastet
@@ -132,7 +123,7 @@ def initiate_report(initiate_id):
                              AND CAST([Modtagelse] AS VARCHAR(20)) = '{req_modtagelse}'
                              AND [Placering] NOT LIKE '2__'
                              GROUP BY [Placering] END """
-    df_probat_receiving = pd.read_sql(query_probat_receiving, con_probat)
+    df_probat_receiving = pd.read_sql(query_probat_receiving, sssi.con_probat)
 
     # Information from Probat for the processing of coffee
     query_probat_processing = f""" IF '{req_modtagelse}' = 'None' -- Ingen modtagelse tastet
@@ -169,7 +160,7 @@ def initiate_report(initiate_id):
                               AND [Modtagelse] = '{req_modtagelse}'
                               GROUP BY [Placering],[Varenummer]
                               END """
-    df_probat_processing = pd.read_sql(query_probat_processing, con_probat)
+    df_probat_processing = pd.read_sql(query_probat_processing, sssi.con_probat)
 
     # Get order numbers the requested coffee has been used in
     query_probat_used_in_roast = f""" IF '{req_modtagelse}' = 'None' -- Ingen modtagelse tastet
@@ -187,7 +178,7 @@ def initiate_report(initiate_id):
                                AND [S_DELIVERY_NAME] = '{req_modtagelse}'
                                GROUP BY [ORDER_NAME]
                                END """
-    df_probat_used_in_roast = pd.read_sql(query_probat_used_in_roast, con_probat)
+    df_probat_used_in_roast = pd.read_sql(query_probat_used_in_roast, sssi.con_probat)
 
     # Convert orders to string for use in later queries
     roast_orders = df_probat_used_in_roast['ORDER_NAME'].unique().tolist()
@@ -224,7 +215,7 @@ def initiate_report(initiate_id):
                                 ,[ORDER_NAME] ,[DESTINATION] END """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
-        df_probat_roast_input = pd.read_sql(query_probat_roast_input, con_probat)
+        df_probat_roast_input = pd.read_sql(query_probat_roast_input, sssi.con_probat)
     else:
         df_probat_roast_input = pd.DataFrame()
 
@@ -255,7 +246,7 @@ def initiate_report(initiate_id):
 								,S.[Slut temp], S.[Vandpct] """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
-        df_probat_roast_output = pd.read_sql(query_probat_roast_output, con_probat)
+        df_probat_roast_output = pd.read_sql(query_probat_roast_output, sssi.con_probat)
     else:
         df_probat_roast_output = pd.DataFrame()
 
@@ -271,7 +262,7 @@ def initiate_report(initiate_id):
                             	  ,[DESTINATION] """
     # Only try to read query if any orders exist
     if len(sql_roast_orders) > 0:
-        df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, con_probat)
+        df_probat_grinding_input = pd.read_sql(query_probat_grinding_input, sssi.con_probat)
     else:
         df_probat_grinding_input = pd.DataFrame(columns=['Ordrenummer'])
 
@@ -300,7 +291,7 @@ def initiate_report(initiate_id):
 								   ,S.[Si 1], S.[Si 2], S.[Si 3], S.[Bund] """
     # Only try to read query if any orders exist
     if len(sql_grinder_orders) > 0:
-        df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, con_probat)
+        df_probat_grinding_output = pd.read_sql(query_probat_grinding_output, sssi.con_probat)
     else:
         df_probat_grinding_output = pd.DataFrame()
 
@@ -370,7 +361,7 @@ def initiate_report(initiate_id):
                         	AND LG.[ORDER_NAME] <> ''
                           GROUP BY LG.[ORDER_NAME],LG.[S_ORDER_NAME]
                           END """
-    df_probat_orders = pd.read_sql(query_probat_orders, con_probat)
+    df_probat_orders = pd.read_sql(query_probat_orders, sssi.con_probat)
     df_probat_orders_top = df_probat_orders.loc[df_probat_orders['Kilde'] != 'Probat mølle']
 
     # Join previous found orders to one list for query below
@@ -433,7 +424,7 @@ def initiate_report(initiate_id):
                           WHERE SK.[Kontraktnummer] = '{req_reference_no}'
                         	AND RRP.[Delivery] = '{req_modtagelse}'
                           END """
-    df_ds_karakterer = pd.read_sql(query_ds_karakterer, con_ds)
+    df_ds_karakterer = pd.read_sql(query_ds_karakterer, sssi.con_ds)
 
     # Samples for green coffees from Probat
     query_probat_gc_samples = f""" IF '{req_modtagelse}' = 'None'
@@ -456,7 +447,7 @@ def initiate_report(initiate_id):
                             	AND [CONTRACT_NO] = '{req_reference_no}'
                                 AND [DELIVERY_NAME] = '{req_modtagelse}'
                             END """
-    df_probat_gc_samples = pd.read_sql(query_probat_gc_samples, con_probat)
+    df_probat_gc_samples = pd.read_sql(query_probat_gc_samples, sssi.con_probat)
 
     # =============================================================================
     # Section 1: Generelt
@@ -979,16 +970,15 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET Data_færdigbehandlet = 1
                       WHERE [Id] = {req_id}""")
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script

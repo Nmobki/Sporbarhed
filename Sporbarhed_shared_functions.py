@@ -7,49 +7,10 @@ from datetime import datetime
 import sys
 
 
-# =============================================================================
-# Variables for query connections
-# =============================================================================
-con_ds = sssi.con_ds
-engine_ds = sssi.engine_ds
-con_nav = sssi.con_nav
-con_comscale = sssi.con_comscale
-con_probat = sssi.con_probat
 
 # =============================================================================
 # Functions
 # =============================================================================
-
-# Get connection information from sssi
-def get_connection(connection: str):
-    """Returns connection string for requested database"""
-    dictionary = {
-        'navision': sssi.con_nav
-        ,'comscale': sssi.con_comscale
-        ,'probat': sssi.con_probat
-        ,'bki_datastore': sssi.con_ds }
-    return dictionary[connection]
-
-# Get cursor
-def get_cursor(connection: str):
-    """Returns cursor for requested database"""
-    dictionary = {
-        'bki_datastore': sssi.cursor_ds }
-    return dictionary[connection]
-
-# Get filepath
-def get_filepath(path_type: str):
-    """Returns filepath for requested type"""
-    dictionary = {
-        'report': sssi.report_filepath}
-    return dictionary[path_type]
-
-# Get engines for connections
-def get_engine(connection: str):
-    """Returns engine for requested database"""
-    dictionary = {
-        'bki_datastore': sssi.engine_ds }
-    return dictionary[connection]
 
 # Check if script is supposed to exit. 0 value = exit
 def get_exit_check(value: int):
@@ -67,7 +28,7 @@ def get_ds_reporttype(request_type: int):
 					   INNER JOIN [trc].[Sporbarhed_sektion] AS SS
 					   ON SRS.[Sektion] = SS.[Id]
                        WHERE [Forespørgselstype] = {request_type} """
-    return pd.read_sql(query, con_ds)
+    return pd.read_sql(query, sssi.con_ds)
 
 # Get information from section log
 def get_ds_section_log(request_id: int):
@@ -82,7 +43,7 @@ def get_ds_section_log(request_id: int):
                 INNER JOIN [trc].[Sporbarhed_statuskode] AS SS
                     ON SL.[Statuskode] = SS.[Id]
                 WHERE SL.[Forespørgsels_id] = {request_id} """
-    return pd.read_sql(query, con_ds)
+    return pd.read_sql(query, sssi.con_ds)
 
 # Get section name for section from query
 def get_section_name(section: int, dataframe) -> str:
@@ -167,7 +128,7 @@ def section_log_insert(request_id: int, section: int, statuscode: int, errorcode
                             'Statuskode':statuscode,
                             'Fejlkode_script':str(errorcode)}
                       , index=[0])
-    df.to_sql('Sporbarhed_sektion_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    df.to_sql('Sporbarhed_sektion_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
 
 # Write dataframe into Excel sheet
 def insert_dataframe_into_excel (engine, dataframe, sheetname: str, include_index: bool):
@@ -258,7 +219,7 @@ def log_insert(event: str, note: str):
     """Inserts a record into BKI_Datastore dbo.log with event and note."""
     dict_log = {'Note': note
                 ,'Event': event}
-    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=engine_ds, schema='dbo', if_exists='append', index=False)
+    pd.DataFrame(data=dict_log, index=[0]).to_sql('Log', con=sssi.con_ds, schema='dbo', if_exists='append', index=False)
 
 # Get info from item table in Navision
 # Query for Navision items, used for adding information to item numbers not queried directly from Navision
@@ -278,7 +239,7 @@ query_nav_items = """ SELECT I.[No_] AS [Nummer],I.[Description] AS [Beskrivelse
                   FROM [dbo].[BKI foods a_s$Item] AS I
 				  LEFT JOIN [dbo].[BKI foods a_s$PROBAT Item] AS PRI
 				  ON I.[No_] = PRI.[CUSTOMER_CODE] """
-df_nav_items = pd.read_sql(query_nav_items, con_nav)
+df_nav_items = pd.read_sql(query_nav_items, sssi.con_nav)
 
 def get_nav_item_info(item_no: str, field: str):
     """Returns information for the requested item number and field from Navision. """
@@ -291,7 +252,7 @@ def get_nav_item_info(item_no: str, field: str):
 # Get info from vendor table in Navision
 query_nav_vendor = """  SELECT [No_] AS [Nummer],[Name] AS [Navn]
                   FROM [dbo].[BKI foods a_s$Vendor] """
-df_nav_vendor = pd.read_sql(query_nav_vendor, con_nav)
+df_nav_vendor = pd.read_sql(query_nav_vendor, sssi.con_nav)
 
 def get_nav_vendor_info(no: str, field: str) -> str:
     """Returns information for the requested vendor and field from Navision. """
@@ -318,7 +279,7 @@ query_nav_order_info = """ SELECT PAH.[No_] AS [Ordrenummer]
                            ON PO.[Source No_] = I.[No_]
                        WHERE PO.[Status] IN (2,3,4)
                            AND I.[Item Category Code] <> 'RÅKAFFE' """
-df_nav_order_info = pd.read_sql(query_nav_order_info, con_nav)
+df_nav_order_info = pd.read_sql(query_nav_order_info, sssi.con_nav)
 
 # Get item number for requested order number
 def get_nav_order_info(order_no: str) -> str:
@@ -339,7 +300,7 @@ def get_nav_orders_from_related_orders(orders: str):
                                FROM [dbo].[BKI foods a_s$Reserved Prod_ Order No_]
                                WHERE [Reserved Prod_ Order No_] IN 
                                ({orders}) AND [Invalid] = 0 """
-    return pd.read_sql(query, con_nav)
+    return pd.read_sql(query, sssi.con_nav)
 
 # Get information whether a contract/delivery has been tasted and approved.
 def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
@@ -365,9 +326,9 @@ def get_contract_delivery_approval_id(contract: str, delivery: str) -> str:
                         WHERE [Kontraktnummer] = '{contract}' AND [Smagningstype] = 0
                         AND [Status] = 1 """
     if delivery is None:
-        df = pd.read_sql(query_no_del, con_ds)
+        df = pd.read_sql(query_no_del, sssi.con_ds)
     else:
-        df = pd.read_sql(query_del, con_ds)
+        df = pd.read_sql(query_del, sssi.con_ds)
     if len(df) == 0:
         return None
     else:

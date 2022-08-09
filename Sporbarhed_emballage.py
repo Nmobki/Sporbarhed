@@ -5,16 +5,10 @@ import pandas as pd
 import networkx as nx
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_finished_goods as ssfg
+import Sporbarhed_shared_server_information as sssi
 
 
 def initiate_report(initiate_id):
-    # =============================================================================
-    # Variables for query connections
-    # =============================================================================
-    con_ds = ssf.get_connection('bki_datastore')
-    cursor_ds = ssf.get_cursor('bki_datastore')
-    engine_ds = ssf.get_engine('bki_datastore')
-    con_nav = ssf.get_connection('navision')
 
     # =============================================================================
     # Read data from request
@@ -23,7 +17,7 @@ def initiate_report(initiate_id):
                         ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Referencetype]
                         FROM [trc].[Sporbarhed_forespørgsel]
                         WHERE [Id] = {initiate_id} """
-    df_request = pd.read_sql(query_ds_request, con_ds)
+    df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
     # Exit script if no request data is found
     ssf.get_exit_check(len(df_request))
@@ -46,16 +40,15 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET [Forespørgsel_igangsat] = getdate()
                       WHERE [Id] = {req_id} """)
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
     # =============================================================================
-    filepath = ssf.get_filepath('report')
+    filepath = sssi.report_filepath
     file_name = f'Rapport_{req_reference_no}_{req_id}'
 
     wb_name = f'{file_name}.xlsx'
@@ -121,18 +114,18 @@ def initiate_report(initiate_id):
     if req_type == 4: # Folie
         if req_reference_type == 4: # Lotnumber
             if req_roll: # req_roll holds a value
-                df_orders = pd.read_sql(query_nav_lot_roll, con_nav)
+                df_orders = pd.read_sql(query_nav_lot_roll, sssi.con_nav)
             else: # req_roll doesn't hold a value
-                df_orders = pd.read_sql(query_nav_lot, con_nav)
+                df_orders = pd.read_sql(query_nav_lot, sssi.con_nav)
         if req_reference_type == 5: # Purchase order
             if req_roll: # req_roll holds a value
-                df_orders = pd.read_sql(query_nav_purch_roll, con_nav)
+                df_orders = pd.read_sql(query_nav_purch_roll, sssi.con_nav)
             else: # req_roll doesn't hold a value
-                df_orders = pd.read_sql(query_nav_purch, con_nav)
+                df_orders = pd.read_sql(query_nav_purch, sssi.con_nav)
     elif req_type == 5: # Karton
-        df_orders = pd.read_sql(query_nav_lot, con_nav)
+        df_orders = pd.read_sql(query_nav_lot, sssi.con_nav)
     elif req_type == 6: # Ventil
-        df_orders = pd.read_sql(query_ds_lot_ventil, con_ds)
+        df_orders = pd.read_sql(query_ds_lot_ventil, sssi.con_ds)
     else:
         df_orders = pd.DataFrame()
 
@@ -373,7 +366,7 @@ def initiate_report(initiate_id):
                                   AND [Referencenummer] IN ({req_orders_total})
                                   AND COALESCE([Smag_Syre],[Smag_Krop],[Smag_Aroma],
                                     [Smag_Eftersmag],[Smag_Robusta]) IS NOT NULL"""
-    df_karakterer = pd.read_sql(query_ds_karakterer, con_ds)
+    df_karakterer = pd.read_sql(query_ds_karakterer, sssi.con_ds)
 
     if ssf.get_section_status_code(df_karakterer) == 99:
         try:
@@ -420,7 +413,7 @@ def initiate_report(initiate_id):
                       WHERE ILE.[Order Type] = 1
                     	  AND ILE.[Entry Type] = 6
                           AND ILE.[Order No_] IN ({req_orders_total}) """
-    df_nav_lotnos = pd.read_sql(query_nav_lotnos, con_nav)
+    df_nav_lotnos = pd.read_sql(query_nav_lotnos, sssi.con_nav)
     # Get vac checks from BKI Datastore
     query_ds_vacslip = """ SELECT [Registreringstidspunkt] AS [Kontroltidspunkt]
                    ,[Initialer] AS [Kontrolleret af],[Lotnummer]
@@ -429,7 +422,7 @@ def initiate_report(initiate_id):
 				   ,CASE WHEN [Overført_email_log] = 1 THEN
 				   'Over grænseværdi' ELSE 'Ok' END AS [Resultat af kontrol]
                    FROM [cof].[Vac_slip] """
-    df_ds_vacslip = pd.read_sql(query_ds_vacslip, con_ds)
+    df_ds_vacslip = pd.read_sql(query_ds_vacslip, sssi.con_ds)
 
 
     if ssf.get_section_status_code(df_nav_lotnos) == 99:
@@ -496,7 +489,7 @@ def initiate_report(initiate_id):
                            ON KP.[Id] = SK.[Id_org]
                            AND SK.[Id_org_kildenummer] = 6
                        WHERE KP.[Ordrenummer] IN ({req_orders_total}) """
-    df_prøver = pd.read_sql(query_ds_samples, con_ds)
+    df_prøver = pd.read_sql(query_ds_samples, sssi.con_ds)
     
     df_temp = df_prøver[df_prøver['Prøvetype int'] != 0]
 
@@ -577,16 +570,15 @@ def initiate_report(initiate_id):
                       ,'Emne': ssf.get_email_subject(req_reference_no, req_type)
                       ,'Forespørgsels_id': req_id
                       ,'Note':req_note}
-    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=engine_ds, schema='trc', if_exists='append', index=False)
+    pd.DataFrame(data=dict_email_log, index=[0]).to_sql('Sporbarhed_email_log', con=sssi.con_ds, schema='trc', if_exists='append', index=False)
     ssf.log_insert(script_name, f'Request id: {req_id} inserted into [trc].[Email_log]')
 
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
+    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
                       SET Data_færdigbehandlet = 1
                       WHERE [Id] = {req_id}""")
-    cursor_ds.commit()
     ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script

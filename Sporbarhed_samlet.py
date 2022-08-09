@@ -8,12 +8,8 @@ import Sporbarhed_rework
 import Sporbarhed_emballage
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_risteordre
+import Sporbarhed_shared_server_information as sssi
 
-
-# =============================================================================
-# Variables for query connections
-# =============================================================================
-con_ds = ssf.get_connection('bki_datastore')
 
 # =============================================================================
 # Read data from request
@@ -22,7 +18,7 @@ query_ds_request =  """ SELECT TOP 1 [Id] ,[Forespørgselstype],[Rapport_modtage
                     ,[Referencenummer] ,[Note_forespørgsel] ,[Modtagelse]  ,[Ordrerelationstype]
                     FROM [trc].[Sporbarhed_forespørgsel]
                     WHERE [Forespørgsel_igangsat] IS NULL """
-df_request = pd.read_sql(query_ds_request, con_ds)
+df_request = pd.read_sql(query_ds_request, sssi.con_ds)
 
 # Exit script if no request data is found
 ssf.get_exit_check(len(df_request))

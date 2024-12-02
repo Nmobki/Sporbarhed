@@ -3,6 +3,7 @@
 
 import pandas as pd
 import networkx as nx
+from sqlalchemy import text
 import Sporbarhed_shared_functions as ssf
 import Sporbarhed_shared_rework as ssr
 import Sporbarhed_shared_finished_goods as ssfg
@@ -42,10 +43,20 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that it is initiated and write into log
     # =============================================================================
-    sssi.con_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
-                      SET [Forespørgsel_igangsat] = getdate()
-                      WHERE [Id] = {req_id} """)
-    # ssf.log_insert(script_name, f'Request id: {req_id} initiated')
+    with sssi.con_ds.connect() as connection:
+        params = {
+            "id": int(req_id)
+            }
+
+        query = text("""
+                     UPDATE [trc].[Sporbarhed_forespørgsel]
+                     SET [Forespørgsel_igangsat] = getdate()
+                     WHERE [Id] = :id
+                     """)
+        connection.execute(query, parameters=params)
+        connection.commit()
+       
+    ssf.log_insert(script_name, f'Request id: {req_id} initiated')
 
     # =============================================================================
     # Variables for files generated
@@ -207,7 +218,7 @@ def initiate_report(initiate_id):
         ssf.section_log_insert(req_id, section_id, ssf.get_section_status_code(df_section_log))
 
     #Save files
-    excel_writer.save()
+    excel_writer.close()
     # ssf.log_insert(script_name, f'Excel file {file_name} created')
 
     # =============================================================================
@@ -225,11 +236,20 @@ def initiate_report(initiate_id):
     # =============================================================================
     # Update request that dataprocessing has been completed
     # =============================================================================
-    # cursor_ds.execute(f"""UPDATE [trc].[Sporbarhed_forespørgsel]
-    #                   SET Data_færdigbehandlet = 1
-    #                   WHERE [Id] = {req_id}""")
-    # cursor_ds.commit()
-    # ssf.log_insert(script_name, f'Request id: {req_id} completed')
+    with sssi.con_ds.connect() as connection:
+        params = {
+            "id": int(req_id)
+            }
+
+        query = text("""
+                     UPDATE [trc].[Sporbarhed_forespørgsel]
+                     SET Data_færdigbehandlet = 1
+                     WHERE [Id] = :id
+                     """)
+        connection.execute(query, parameters=params)
+        connection.commit()
+           
+    ssf.log_insert(script_name, f'Request id: {req_id} completed')
 
     # Exit script
     ssf.get_exit_check(0)
